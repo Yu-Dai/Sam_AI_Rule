@@ -6,6 +6,7 @@
   "labDir": ".guardian/lab",
   "archiveDir": ".guardian/archive",
   "ignoreDirs": [
+    "ai-guardian",
     "node_modules",
     ".git",
     ".guardian",

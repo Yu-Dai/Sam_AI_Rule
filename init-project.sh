@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
-# init-project.sh — 在當前專案目錄初始化 Sam_AI_Rule 設定
+# init-project.sh — 在 Sam_AI_Rule clone 子目錄內執行，把規則檔複製到 parent (專案根目錄)
 #
-# 用法（在新專案目錄內執行）：
-#   bash $HOME/Sam_AI_Rule/init-project.sh
+# 用法：
+#   cd <project>/Sam_AI_Rule
+#   bash init-project.sh
 #
-# 行為：
-#   1. 複製 CLAUDE.md 到當前目錄（若已存在則跳過）
-#   2. (詢問) 複製 PROJECT.md 模板
-#   3. (詢問) 執行 ai-guardian adopt 掛載守衛
+# 行為（操作目標都是 parent，即專案根目錄）：
+#   1. 複製 CLAUDE.md 到 parent（若已存在則跳過）
+#   2. (詢問) 複製 PROJECT.md 模板到 parent
+#   3. (詢問) 把 Sam_AI_Rule/ 加到 parent 的 .gitignore
+#      （避免 ai-guardian adopt 把 Sam_AI_Rule 內的程式碼納入掃描）
+#   4. (詢問) cd 到 parent 後執行 ai-guardian adopt 掛載守衛
 
 set -e
 
@@ -22,51 +25,64 @@ _pause_on_exit() {
 }
 trap _pause_on_exit EXIT
 
-REPO_DIR="$HOME/Sam_AI_Rule"
-
-if [ ! -d "$REPO_DIR" ]; then
-  echo "[error] Sam_AI_Rule 未安裝於 $REPO_DIR，請先執行 bootstrap.sh" >&2
+# 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
+if [ ! -f CLAUDE.md ] || [ ! -d ai-guardian ] || [ ! -d templates ]; then
+  echo "[error] 此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $PWD）" >&2
+  echo "        正確做法：" >&2
+  echo "          cd <project>/Sam_AI_Rule" >&2
+  echo "          bash init-project.sh" >&2
   exit 1
 fi
 
-# 防呆：偵測使用者誤在 Sam_AI_Rule 自己的 clone 內執行（會把設定建在錯的地方）
-if [ -f bootstrap.sh ] && [ -d ai-guardian ] && [ -d templates ] && [ -d .git ]; then
-  echo "[error] 你目前在 Sam_AI_Rule 自己的 clone 目錄內（PWD: $PWD）。" >&2
-  echo "        init-project 應該在你的『下游專案』根目錄執行，不是這裡。" >&2
-  echo "        正確流程：" >&2
-  echo "          cd <你的專案根目錄>" >&2
-  echo "          bash \$HOME/Sam_AI_Rule/init-project.sh" >&2
-  exit 1
-fi
+SAM_AI_DIR="$(pwd)"
+TARGET="$(cd .. && pwd)"
+SAM_AI_NAME="$(basename "$SAM_AI_DIR")"
+
+echo "Sam_AI_Rule 路徑：$SAM_AI_DIR"
+echo "專案根目錄：$TARGET"
+echo
 
 # 1. CLAUDE.md
-if [ -f CLAUDE.md ]; then
-  echo "[skip] CLAUDE.md 已存在"
+if [ -f "$TARGET/CLAUDE.md" ]; then
+  echo "[skip] $TARGET/CLAUDE.md 已存在"
 else
-  cp "$REPO_DIR/CLAUDE.md" .
-  echo "[ok] CLAUDE.md 已建立"
+  cp CLAUDE.md "$TARGET/"
+  echo "[ok] CLAUDE.md → $TARGET/"
 fi
 
 # 2. PROJECT.md (詢問)
 read -r -p '是否建立 PROJECT.md（長期專案方向追蹤）？(y/N) ' ans
 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
-  if [ -f PROJECT.md ]; then
-    echo "[skip] PROJECT.md 已存在"
+  if [ -f "$TARGET/PROJECT.md" ]; then
+    echo "[skip] $TARGET/PROJECT.md 已存在"
   else
-    cp "$REPO_DIR/templates/PROJECT.md" .
-    echo "[ok] PROJECT.md 模板已建立，請填寫"
+    cp templates/PROJECT.md "$TARGET/"
+    echo "[ok] PROJECT.md → $TARGET/（請填寫）"
   fi
 fi
 
-# 3. ai-guardian (詢問)
-read -r -p '是否掛載 ai-guardian？(y/N) ' ans
+# 3. 把 Sam_AI_Rule 加到 parent 的 .gitignore（避免被 ai-guardian / git 納入）
+if [ -f "$TARGET/.gitignore" ] && grep -qE "^/?${SAM_AI_NAME}/?\$" "$TARGET/.gitignore"; then
+  echo "[skip] $TARGET/.gitignore 已含 $SAM_AI_NAME/"
+else
+  read -r -p "是否把 $SAM_AI_NAME/ 加到 $TARGET/.gitignore？(Y/n) " ans
+  if [ "$ans" != "n" ] && [ "$ans" != "N" ]; then
+    echo "" >> "$TARGET/.gitignore"
+    echo "# Sam_AI_Rule clone（vendored 工具，不入 git）" >> "$TARGET/.gitignore"
+    echo "/$SAM_AI_NAME/" >> "$TARGET/.gitignore"
+    echo "[ok] 已將 /$SAM_AI_NAME/ 加入 $TARGET/.gitignore"
+  fi
+fi
+
+# 4. ai-guardian (詢問)
+read -r -p '是否在專案根目錄掛載 ai-guardian？(y/N) ' ans
 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
   if ! command -v ai-guardian >/dev/null 2>&1; then
-    echo "[error] ai-guardian 指令未找到，請確認 bootstrap.sh 已正確執行（包含 npm link）" >&2
+    echo "[error] ai-guardian 指令未找到。請先在 Sam_AI_Rule 內執行 bash bootstrap.sh" >&2
   else
-    ai-guardian adopt
+    cd "$TARGET" && ai-guardian adopt
   fi
 fi
 
 echo
-echo "初始化完成。"
+echo "初始化完成於：$TARGET"

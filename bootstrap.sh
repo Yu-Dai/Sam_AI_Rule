@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# bootstrap.sh — 在新 Linux/Mac 機器（或 Windows git bash）安裝 Sam_AI_Rule
+# bootstrap.sh — 在 Sam_AI_Rule clone 子目錄內執行，安裝 ai-guardian 為全域指令
 #
 # 用法：
-#   curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.sh | bash
+#   cd <project>
+#   git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
+#   cd Sam_AI_Rule
+#   bash bootstrap.sh
 #
 # 行為：
-#   1. Clone（或更新）Sam_AI_Rule 到 $HOME/Sam_AI_Rule
-#   2. 安裝 ai-guardian 依賴並 npm link 為全域指令
+#   1. 進入 ai-guardian 子目錄
+#   2. npm install + npm link（每台機器跑一次即可，全域註冊 ai-guardian 指令）
+#   3. 不複製規則檔（用 init-project.sh 做）
 
 set -e
 
@@ -21,29 +25,26 @@ _pause_on_exit() {
 }
 trap _pause_on_exit EXIT
 
-REPO_URL='https://github.com/Yu-Dai/Sam_AI_Rule.git'
-INSTALL_DIR="$HOME/Sam_AI_Rule"
-
-# 前置檢查
-for cmd in git npm; do
-  if ! command -v "$cmd" >/dev/null 2>&1; then
-    echo "[error] 缺少 $cmd，請先安裝。" >&2
-    exit 1
-  fi
-done
-
-# 1. Clone or pull
-if [ -d "$INSTALL_DIR" ]; then
-  echo "[Sam_AI_Rule] 已存在於 $INSTALL_DIR，執行 git pull..."
-  cd "$INSTALL_DIR" && git pull
-else
-  echo "[Sam_AI_Rule] Clone 到 $INSTALL_DIR..."
-  git clone "$REPO_URL" "$INSTALL_DIR"
+# 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
+if [ ! -d ai-guardian ] || [ ! -f CLAUDE.md ]; then
+  echo "[error] 此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $PWD）" >&2
+  echo "        正確做法：" >&2
+  echo "          cd <project>" >&2
+  echo "          git clone https://github.com/Yu-Dai/Sam_AI_Rule.git" >&2
+  echo "          cd Sam_AI_Rule" >&2
+  echo "          bash bootstrap.sh" >&2
+  exit 1
 fi
 
-# 2. ai-guardian
+# 前置檢查：npm 必須存在
+if ! command -v npm >/dev/null 2>&1; then
+  echo "[error] 缺少 npm，請先安裝 Node.js（建議 LTS）：https://nodejs.org/" >&2
+  exit 1
+fi
+
+cd ai-guardian
+
 echo "[ai-guardian] 安裝依賴..."
-cd "$INSTALL_DIR/ai-guardian"
 npm install
 if [ $? -ne 0 ]; then
   echo "[error] npm install 失敗，請檢查網路或 npm 設定後重試。" >&2
@@ -61,25 +62,23 @@ set -e
 
 echo
 if [ "$LINK_EXIT" -eq 0 ]; then
-  echo "完成！全域指令 'ai-guardian' 已註冊。"
-  echo "  Sam_AI_Rule 路徑：$INSTALL_DIR"
+  echo "完成！全域指令 'ai-guardian' 已註冊（每台機器跑一次即可）。"
   echo
-  echo "新專案初始化："
-  echo "  cd <new-project>"
-  echo "  bash $INSTALL_DIR/init-project.sh"
+  echo "下一步：在這個 Sam_AI_Rule clone 內執行 init-project.sh"
+  echo "把規則檔複製到專案根目錄："
+  echo "  cd .."
+  echo "  bash Sam_AI_Rule/init-project.sh"
 else
-  echo "⚠️  npm link 失敗（exit code: $LINK_EXIT）。常見原因：權限不足。"
+  echo "[warn] npm link 失敗（exit code: $LINK_EXIT）。常見原因：權限不足。"
   echo "依賴已安裝完成，但全域指令未註冊。請從以下擇一："
   echo
   echo "選項 A：以 sudo 重新註冊"
-  echo "  cd $INSTALL_DIR/ai-guardian && sudo npm link"
+  echo "  cd ai-guardian && sudo npm link"
   echo
   echo "選項 B：手動加 alias 到 shell profile（不需要 sudo）"
   echo "  在 ~/.bashrc 或 ~/.zshrc 加入下面這行："
-  echo "  alias ai-guardian='node $INSTALL_DIR/ai-guardian/bin/cli.js'"
+  echo "  alias ai-guardian='node $(pwd)/bin/cli.js'"
   echo
   echo "選項 C：每次用完整路徑呼叫"
-  echo "  node $INSTALL_DIR/ai-guardian/bin/cli.js <command>"
-  echo
-  echo "Sam_AI_Rule 路徑：$INSTALL_DIR"
+  echo "  node $(pwd)/bin/cli.js <command>"
 fi

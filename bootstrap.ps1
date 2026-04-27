@@ -1,11 +1,15 @@
-﻿# bootstrap.ps1 — 在新 Windows 機器上安裝 Sam_AI_Rule
+﻿# bootstrap.ps1 — 在 Sam_AI_Rule clone 子目錄內執行，安裝 ai-guardian 為全域指令
 #
-# 用法（PowerShell）：
-#   irm https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.ps1 | iex
+# 用法：
+#   cd <project>
+#   git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
+#   cd Sam_AI_Rule
+#   .\bootstrap.ps1
 #
 # 行為：
-#   1. Clone（或更新）Sam_AI_Rule 到 $HOME\Sam_AI_Rule
-#   2. 安裝 ai-guardian 依賴並 npm link 為全域指令
+#   1. 進入 ai-guardian 子目錄
+#   2. npm install + npm link（每台機器跑一次即可，全域註冊 ai-guardian 指令）
+#   3. 不複製規則檔（用 init-project.ps1 做）
 
 $ErrorActionPreference = 'Stop'
 
@@ -17,30 +21,27 @@ $OutputEncoding = [System.Text.UTF8Encoding]::new()
 $exitCode = 0
 
 try {
-    $repoUrl     = 'https://github.com/Yu-Dai/Sam_AI_Rule.git'
-    $installDir  = Join-Path $HOME 'Sam_AI_Rule'
-
-    # 前置檢查
-    foreach ($cmd in @('git', 'npm')) {
-        if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
-            throw "缺少 $cmd，請先安裝。"
-        }
+    # 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
+    if (-not ((Test-Path 'ai-guardian') -and (Test-Path 'CLAUDE.md'))) {
+        $msg = @"
+此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $(Get-Location)）
+正確做法：
+  cd <project>
+  git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
+  cd Sam_AI_Rule
+  .\bootstrap.ps1
+"@
+        throw $msg
     }
 
-    # 1. Clone or pull
-    if (Test-Path $installDir) {
-        Write-Host "[Sam_AI_Rule] 已存在於 $installDir，執行 git pull..." -ForegroundColor Cyan
-        Push-Location $installDir
-        git pull
-        Pop-Location
-    } else {
-        Write-Host "[Sam_AI_Rule] Clone 到 $installDir..." -ForegroundColor Cyan
-        git clone $repoUrl $installDir
+    # 前置檢查：npm 必須存在
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        throw "缺少 npm，請先安裝 Node.js（建議 LTS）：https://nodejs.org/"
     }
 
-    # 2. ai-guardian
+    Push-Location 'ai-guardian'
+
     Write-Host "[ai-guardian] 安裝依賴..." -ForegroundColor Cyan
-    Push-Location (Join-Path $installDir 'ai-guardian')
     npm install
     if ($LASTEXITCODE -ne 0) {
         $code = $LASTEXITCODE
@@ -55,31 +56,30 @@ try {
     Write-Host "[ai-guardian] 嘗試 npm link 註冊全域指令..." -ForegroundColor Cyan
     npm link
     $linkExitCode = $LASTEXITCODE
+    $aiGuardianBin = (Get-Location).Path + '\bin\cli.js'
     Pop-Location
 
     Write-Host ""
     if ($linkExitCode -eq 0) {
-        Write-Host "完成！全域指令 'ai-guardian' 已註冊。" -ForegroundColor Green
-        Write-Host "  Sam_AI_Rule 路徑：$installDir" -ForegroundColor Gray
+        Write-Host "完成！全域指令 'ai-guardian' 已註冊（每台機器跑一次即可）。" -ForegroundColor Green
         Write-Host ""
-        Write-Host "新專案初始化：" -ForegroundColor Yellow
-        Write-Host "  cd <new-project>" -ForegroundColor Gray
-        Write-Host "  & '$installDir\init-project.ps1'" -ForegroundColor Gray
+        Write-Host "下一步：在這個 Sam_AI_Rule clone 內執行 init-project.ps1" -ForegroundColor Yellow
+        Write-Host "把規則檔複製到專案根目錄：" -ForegroundColor Yellow
+        Write-Host "  cd .." -ForegroundColor Gray
+        Write-Host "  & .\Sam_AI_Rule\init-project.ps1" -ForegroundColor Gray
     } else {
         Write-Host "[warn] npm link 失敗（exit code: $linkExitCode）。常見原因：權限不足。" -ForegroundColor Yellow
         Write-Host "依賴已安裝完成，但全域指令未註冊。請從以下擇一：" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "選項 A：以管理員 PowerShell 重新執行 bootstrap" -ForegroundColor Cyan
-        Write-Host "  irm https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.ps1 | iex" -ForegroundColor Gray
+        Write-Host "選項 A：以管理員 PowerShell 重新執行" -ForegroundColor Cyan
+        Write-Host "  cd $(Split-Path -Parent $aiGuardianBin)\.." -ForegroundColor Gray
+        Write-Host "  .\bootstrap.ps1" -ForegroundColor Gray
         Write-Host ""
         Write-Host "選項 B：手動加入 PowerShell function 到 `$PROFILE（不需要管理員）" -ForegroundColor Cyan
-        Write-Host "  把下面這行加進你的 `$PROFILE：" -ForegroundColor Gray
-        Write-Host "  function ai-guardian { node `"$installDir\ai-guardian\bin\cli.js`" @args }" -ForegroundColor Gray
+        Write-Host "  function ai-guardian { node `"$aiGuardianBin`" @args }" -ForegroundColor Gray
         Write-Host ""
         Write-Host "選項 C：每次用完整路徑呼叫" -ForegroundColor Cyan
-        Write-Host "  node `"$installDir\ai-guardian\bin\cli.js`" <command>" -ForegroundColor Gray
-        Write-Host ""
-        Write-Host "Sam_AI_Rule 路徑：$installDir" -ForegroundColor Gray
+        Write-Host "  node `"$aiGuardianBin`" <command>" -ForegroundColor Gray
     }
 }
 catch {

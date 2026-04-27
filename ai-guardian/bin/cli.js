@@ -14,9 +14,10 @@ if (!fs.existsSync(nodeModulesPath)) {
   console.error('  cd ' + path.resolve(__dirname, '..'));
   console.error('  npm install');
   console.error('');
-  console.error('或執行 Sam_AI_Rule 的 bootstrap 一鍵安裝：');
-  console.error('  bash $HOME/Sam_AI_Rule/bootstrap.sh        # Linux/Mac/git bash');
-  console.error('  & "$HOME\\Sam_AI_Rule\\bootstrap.ps1"     # Windows PowerShell');
+  console.error('或在 Sam_AI_Rule clone 內執行 bootstrap 一鍵安裝：');
+  console.error('  cd <Sam_AI_Rule clone>');
+  console.error('  bash bootstrap.sh        # Linux/Mac/git bash');
+  console.error('  .\\bootstrap.ps1         # Windows PowerShell');
   console.error('');
   process.exit(1);
 }

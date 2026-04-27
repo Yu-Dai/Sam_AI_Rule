@@ -1,6 +1,6 @@
 # Sam AI Rule
 
-個人 AI 助手（Claude Code）設定與專案初始化工具包。
+個人 AI 助手（Claude Code）設定與專案初始化工具包。**每個專案 clone 一份**，把規則 / 模板 / 守衛複製到專案根目錄。
 
 ## 內容
 
@@ -14,74 +14,77 @@
 
 ---
 
-## ⚠️ 重要：使用者心智模型
-
-本 repo 是「**全機器一份**」的工具庫，**不是**每個專案複製一份。
-
-**正確**：clone 一次到 `$HOME/Sam_AI_Rule`，所有專案共用。
-
-**錯誤**：在每個專案目錄內 `git clone` 本 repo（會在專案內塞一個 `Sam_AI_Rule/` 子目錄，後續設定全建在錯的地方）。
-
----
-
 ## 使用流程
 
-### 步驟 1：新機器一次性安裝
+### 一次性（每台新機器跑一次）：安裝 ai-guardian 為全域指令
 
-**Windows（PowerShell）**：
-
-```powershell
-irm https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.ps1 | iex
-```
-
-**Linux / Mac / Windows git bash**：
+任意挑一個專案 clone Sam_AI_Rule 後，跑 bootstrap：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.sh | bash
+git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
+cd Sam_AI_Rule
+bash bootstrap.sh        # Linux / Mac / Windows git bash
+# 或
+.\bootstrap.ps1          # Windows PowerShell
 ```
 
-執行內容：
-1. Clone（或 git pull）本 repo 到 `$HOME/Sam_AI_Rule`
-2. 安裝 ai-guardian 依賴並 `npm link` 為全域指令
+bootstrap 只做一件事：**`cd ai-guardian && npm install && npm link`**，全域註冊 `ai-guardian` 指令。每台機器跑一次即可。
 
-完成後 `$HOME/Sam_AI_Rule` 是全機器共享的 Sam_AI_Rule 安裝點，**不要動它**。
-
-### 步驟 2：每個新專案執行一次初始化
-
-在你的**專案根目錄**（不是 `$HOME/Sam_AI_Rule`）內執行：
-
-```powershell
-# Windows
-cd <your-project-root>
-& "$HOME\Sam_AI_Rule\init-project.ps1"
-```
+### 每個新專案：clone Sam_AI_Rule 並初始化
 
 ```bash
-# Linux / Mac / git bash
-cd <your-project-root>
-bash $HOME/Sam_AI_Rule/init-project.sh
+cd <project>
+git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
+cd Sam_AI_Rule
+bash init-project.sh     # 或 .\init-project.ps1
 ```
 
-互動式詢問：是否複製 `CLAUDE.md` / `PROJECT.md` / 掛載 ai-guardian。
+`init-project` 會在 **parent 目錄（你的專案根目錄）** 互動式做以下事：
+1. 複製 `CLAUDE.md` 到專案根目錄
+2. 詢問是否複製 `PROJECT.md` 模板
+3. 詢問是否把 `Sam_AI_Rule/` 加到專案的 `.gitignore`（推薦，因為這是 vendored 工具）
+4. 詢問是否在專案根目錄掛載 ai-guardian（執行 `ai-guardian adopt`）
 
-執行完，`CLAUDE.md`、`.guardian/`、`.claude/`、`AGENTS.md` 等會建立在你的**專案根目錄**。
+執行完，`CLAUDE.md`、`PROJECT.md`、`.guardian/`、`.claude/`、`AGENTS.md` 等都會在**專案根目錄**，`Sam_AI_Rule/` 子目錄保留作為 vendored 工具。
 
 ---
 
-## 不需要完整安裝？只想拉單一檔案
+## 不想用 init-project 腳本？純手動也可以
 
 ```bash
-# 只想要規則檔
-curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/CLAUDE.md -o CLAUDE.md
+cd <project>
+git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
+cp Sam_AI_Rule/CLAUDE.md .
+cp Sam_AI_Rule/templates/PROJECT.md .   # 需要的話
+echo "/Sam_AI_Rule/" >> .gitignore       # 推薦
+ai-guardian adopt                        # 需要的話
+```
 
-# 只想要 PROJECT.md 模板
-curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/templates/PROJECT.md -o PROJECT.md
+或者完全不 clone，只想要單檔：
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/CLAUDE.md -o CLAUDE.md
+```
+
+---
+
+## 升級 Sam_AI_Rule 在某個專案
+
+```bash
+cd <project>/Sam_AI_Rule
+git pull
+# 然後再次跑 init-project（會 skip 已存在檔，問你要不要重新 adopt）
+bash init-project.sh
+```
+
+或直接覆蓋 CLAUDE.md：
+```bash
+cp Sam_AI_Rule/CLAUDE.md .
 ```
 
 ---
 
 ## 維護
 
-任何元件變更 → commit → push 到 `main`。`bootstrap` 重跑會自動 git pull 拿到最新。
+任何元件變更 → commit → push 到 `main`。下次 clone 自動拿到最新版。
 
 本 repo 只放**跨專案共通**的東西。個別專案的設定請放在那個專案內。
