@@ -40,3 +40,13 @@ coverage/
 
 # === 本機個人草稿（不入庫） ===
 *.local.md
+
+# AI Guardian – 暫存任務狀態（不納入版本控制）
+.guardian/current-task.json
+.guardian/current-task.md
+.guardian/HOTFIX_MODE
+.guardian/audit.log
+.guardian/archive/
+.guardian/debate.json
+.guardian/cto_attack.md
+.guardian/defense_arch.md

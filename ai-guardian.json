@@ -1,0 +1,17 @@
+{
+  "mode": "adopt",
+  "productionDirs": [
+    "."
+  ],
+  "labDir": ".guardian/lab",
+  "archiveDir": ".guardian/archive",
+  "ignoreDirs": [
+    "node_modules",
+    ".git",
+    ".guardian",
+    "dist",
+    "build",
+    ".idea",
+    ".vscode"
+  ]
+}
