@@ -10,6 +10,17 @@
 
 set -e
 
+# 雙擊啟動時，避免視窗在腳本結束（成功或失敗）後立刻關掉看不到訊息
+_pause_on_exit() {
+  local code=$?
+  echo ""
+  if [ "$code" -ne 0 ]; then
+    echo "[error] 腳本以非零代碼結束（exit code: $code）。請查看上方錯誤訊息。" >&2
+  fi
+  read -r -p "按 Enter 關閉視窗..." _ || true
+}
+trap _pause_on_exit EXIT
+
 REPO_URL='https://github.com/Yu-Dai/Sam_AI_Rule.git'
 INSTALL_DIR="$HOME/Sam_AI_Rule"
 
