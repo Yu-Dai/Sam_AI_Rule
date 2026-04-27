@@ -24,6 +24,18 @@ try {
         throw "Sam_AI_Rule 未安裝於 $repoDir，請先執行 bootstrap.ps1"
     }
 
+    # 防呆：偵測使用者誤在 Sam_AI_Rule 自己的 clone 內執行（會把設定建在錯的地方）
+    if ((Test-Path 'bootstrap.ps1') -and (Test-Path 'ai-guardian') -and (Test-Path 'templates') -and (Test-Path '.git')) {
+        $msg = @"
+你目前在 Sam_AI_Rule 自己的 clone 目錄內（PWD: $(Get-Location)）。
+init-project 應該在你的『下游專案』根目錄執行，不是這裡。
+正確流程：
+  cd <你的專案根目錄>
+  & "`$HOME\Sam_AI_Rule\init-project.ps1"
+"@
+        throw $msg
+    }
+
     # 1. CLAUDE.md
     if (Test-Path 'CLAUDE.md') {
         Write-Host "[skip] CLAUDE.md 已存在" -ForegroundColor Yellow

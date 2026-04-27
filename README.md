@@ -1,6 +1,6 @@
 # Sam AI Rule
 
-個人 AI 助手（Claude Code）設定與專案初始化工具包。一次 clone，取得規則 + 守衛 + 模板。
+個人 AI 助手（Claude Code）設定與專案初始化工具包。
 
 ## 內容
 
@@ -14,27 +14,19 @@
 
 ---
 
-## 使用方式
+## ⚠️ 重要：使用者心智模型
 
-### 新專案僅需規則檔
+本 repo 是「**全機器一份**」的工具庫，**不是**每個專案複製一份。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/CLAUDE.md -o CLAUDE.md
-```
+**正確**：clone 一次到 `$HOME/Sam_AI_Rule`，所有專案共用。
 
-### 新專案需要長期方向追蹤
+**錯誤**：在每個專案目錄內 `git clone` 本 repo（會在專案內塞一個 `Sam_AI_Rule/` 子目錄，後續設定全建在錯的地方）。
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/templates/PROJECT.md -o PROJECT.md
-```
+---
 
-填寫後保留在專案根目錄。詳見 CLAUDE.md §15（方向對齊）。
+## 使用流程
 
-### 新專案掛載 ai-guardian
-
-詳見 [`ai-guardian/README.md`](ai-guardian/README.md)。
-
-### 新機器初次設定
+### 步驟 1：新機器一次性安裝
 
 **Windows（PowerShell）**：
 
@@ -48,30 +40,48 @@ irm https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.ps1 | ie
 curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.sh | bash
 ```
 
-兩者都會：
-1. Clone（或更新）本 repo 到 `~/Sam_AI_Rule`
+執行內容：
+1. Clone（或 git pull）本 repo 到 `$HOME/Sam_AI_Rule`
 2. 安裝 ai-guardian 依賴並 `npm link` 為全域指令
 
-### 新專案一鍵初始化（裝過 bootstrap 後）
+完成後 `$HOME/Sam_AI_Rule` 是全機器共享的 Sam_AI_Rule 安裝點，**不要動它**。
 
-在新專案目錄內執行：
+### 步驟 2：每個新專案執行一次初始化
+
+在你的**專案根目錄**（不是 `$HOME/Sam_AI_Rule`）內執行：
 
 ```powershell
 # Windows
+cd <your-project-root>
 & "$HOME\Sam_AI_Rule\init-project.ps1"
 ```
 
 ```bash
 # Linux / Mac / git bash
+cd <your-project-root>
 bash $HOME/Sam_AI_Rule/init-project.sh
 ```
 
-互動式詢問：複製 `CLAUDE.md`、是否要 `PROJECT.md`、是否要掛載 ai-guardian。
+互動式詢問：是否複製 `CLAUDE.md` / `PROJECT.md` / 掛載 ai-guardian。
+
+執行完，`CLAUDE.md`、`.guardian/`、`.claude/`、`AGENTS.md` 等會建立在你的**專案根目錄**。
+
+---
+
+## 不需要完整安裝？只想拉單一檔案
+
+```bash
+# 只想要規則檔
+curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/CLAUDE.md -o CLAUDE.md
+
+# 只想要 PROJECT.md 模板
+curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/templates/PROJECT.md -o PROJECT.md
+```
 
 ---
 
 ## 維護
 
-任何元件變更 → commit → push 到 `main` 分支。下次 clone 自動拿到最新版。
+任何元件變更 → commit → push 到 `main`。`bootstrap` 重跑會自動 git pull 拿到最新。
 
-不要在這個 repo 內塞「個別專案」的設定 — 這裡只放跨專案共通的東西。
+本 repo 只放**跨專案共通**的東西。個別專案的設定請放在那個專案內。

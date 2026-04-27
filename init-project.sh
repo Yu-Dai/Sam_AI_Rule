@@ -29,6 +29,16 @@ if [ ! -d "$REPO_DIR" ]; then
   exit 1
 fi
 
+# 防呆：偵測使用者誤在 Sam_AI_Rule 自己的 clone 內執行（會把設定建在錯的地方）
+if [ -f bootstrap.sh ] && [ -d ai-guardian ] && [ -d templates ] && [ -d .git ]; then
+  echo "[error] 你目前在 Sam_AI_Rule 自己的 clone 目錄內（PWD: $PWD）。" >&2
+  echo "        init-project 應該在你的『下游專案』根目錄執行，不是這裡。" >&2
+  echo "        正確流程：" >&2
+  echo "          cd <你的專案根目錄>" >&2
+  echo "          bash \$HOME/Sam_AI_Rule/init-project.sh" >&2
+  exit 1
+fi
+
 # 1. CLAUDE.md
 if [ -f CLAUDE.md ]; then
   echo "[skip] CLAUDE.md 已存在"

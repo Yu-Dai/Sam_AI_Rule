@@ -41,6 +41,17 @@ coverage/
 # === 本機個人草稿（不入庫） ===
 *.local.md
 
+# === 防呆：本 repo 根目錄不該有 PROJECT.md（PROJECT.md 是給下游專案用的，
+#    模板放在 templates/PROJECT.md。/PROJECT.md 只匹配根目錄，不影響子目錄） ===
+/PROJECT.md
+/AGENTS.md
+/ai-guardian.json
+/.cursor/
+/.claude/
+/.agents/
+/.windsurf/
+/.roo/
+
 # AI Guardian – 暫存任務狀態（不納入版本控制）
 .guardian/current-task.json
 .guardian/current-task.md
