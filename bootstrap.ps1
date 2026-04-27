@@ -1,4 +1,4 @@
-# bootstrap.ps1 — 在新 Windows 機器上安裝 Sam_AI_Rule
+﻿# bootstrap.ps1 — 在新 Windows 機器上安裝 Sam_AI_Rule
 #
 # 用法（PowerShell）：
 #   irm https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.ps1 | iex
@@ -8,6 +8,10 @@
 #   2. 安裝 ai-guardian 依賴並 npm link 為全域指令
 
 $ErrorActionPreference = 'Stop'
+
+# 強制 UTF-8 console encoding（避免繁中 Write-Host 在 PS 5.1 顯示亂碼）
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $repoUrl     = 'https://github.com/Yu-Dai/Sam_AI_Rule.git'
 $installDir  = Join-Path $HOME 'Sam_AI_Rule'
@@ -55,7 +59,7 @@ if ($linkExitCode -eq 0) {
     Write-Host "  cd <new-project>" -ForegroundColor Gray
     Write-Host "  & '$installDir\init-project.ps1'" -ForegroundColor Gray
 } else {
-    Write-Host "⚠️  npm link 失敗（exit code: $linkExitCode）。常見原因：權限不足。" -ForegroundColor Yellow
+    Write-Host "[warn] npm link 失敗（exit code: $linkExitCode）。常見原因：權限不足。" -ForegroundColor Yellow
     Write-Host "依賴已安裝完成，但全域指令未註冊。請從以下擇一：" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "選項 A：以管理員 PowerShell 重新執行 bootstrap" -ForegroundColor Cyan

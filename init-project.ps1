@@ -1,4 +1,4 @@
-# init-project.ps1 — 在當前專案目錄初始化 Sam_AI_Rule 設定
+﻿# init-project.ps1 — 在當前專案目錄初始化 Sam_AI_Rule 設定
 #
 # 用法（在新專案目錄內執行）：
 #   & "$HOME\Sam_AI_Rule\init-project.ps1"
@@ -9,6 +9,10 @@
 #   3. (詢問) 執行 ai-guardian adopt 掛載守衛
 
 $ErrorActionPreference = 'Stop'
+
+# 強制 UTF-8 console encoding（避免繁中 Write-Host 在 PS 5.1 顯示亂碼）
+$OutputEncoding = [System.Text.UTF8Encoding]::new()
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
 $repoDir = Join-Path $HOME 'Sam_AI_Rule'
 
