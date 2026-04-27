@@ -32,11 +32,41 @@ curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/templates/P
 
 ### 新專案掛載 ai-guardian
 
-詳見 [`ai-guardian/`](ai-guardian/) 目錄（README 待補）。
+詳見 [`ai-guardian/README.md`](ai-guardian/README.md)。
 
 ### 新機器初次設定
 
-bootstrap script 設計中。手動方式：clone 本 repo 到本機（如 `~/Sam_AI_Rule`），新專案再從那邊複製需要的檔案。
+**Windows（PowerShell）**：
+
+```powershell
+irm https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.ps1 | iex
+```
+
+**Linux / Mac / Windows git bash**：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/bootstrap.sh | bash
+```
+
+兩者都會：
+1. Clone（或更新）本 repo 到 `~/Sam_AI_Rule`
+2. 安裝 ai-guardian 依賴並 `npm link` 為全域指令
+
+### 新專案一鍵初始化（裝過 bootstrap 後）
+
+在新專案目錄內執行：
+
+```powershell
+# Windows
+& "$HOME\Sam_AI_Rule\init-project.ps1"
+```
+
+```bash
+# Linux / Mac / git bash
+bash $HOME/Sam_AI_Rule/init-project.sh
+```
+
+互動式詢問：複製 `CLAUDE.md`、是否要 `PROJECT.md`、是否要掛載 ai-guardian。
 
 ---
 
