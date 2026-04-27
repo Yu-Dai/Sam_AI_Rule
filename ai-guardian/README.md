@@ -114,3 +114,52 @@ ai-guardian uninstall --full  # 完整移除 .guardian/、ai-guardian.json
 - 目前只支援 JavaScript / TypeScript（`.js` `.jsx` `.ts` `.tsx`）
 - 邏輯雷同偵測有最小函數長度門檻（< 3 行函數不檢查）
 - `debate` 對峙法庭機制尚未完整（只實作 `debate reset`）
+
+---
+
+## Troubleshooting
+
+### `Cannot find module '@babel/parser'` 或 `Error: Cannot find module ...`
+**原因**：`node_modules` 未安裝（直接 `git clone` 跳過 bootstrap 的常見情況）。
+
+**修復**：
+```bash
+cd <Sam_AI_Rule path>/ai-guardian
+npm install
+```
+cli.js 從本版開始有自我體檢，會直接印出修復指令。
+
+### 執行 `ai-guardian` 顯示「找不到指令」
+**原因**：`npm link` 沒成功，全域指令未註冊。
+
+**修復**（擇一）：
+- **Windows**：以管理員 PowerShell 重跑 `npm link`，或重跑 bootstrap.ps1
+- **macOS / Linux**：`sudo npm link`
+- **不想用 sudo / admin**：在 shell profile 加 alias：
+  - bash / zsh：`alias ai-guardian='node $HOME/Sam_AI_Rule/ai-guardian/bin/cli.js'`
+  - PowerShell `$PROFILE`：`function ai-guardian { node "$HOME\Sam_AI_Rule\ai-guardian\bin\cli.js" @args }`
+
+bootstrap script 已內建 fallback，會在 `npm link` 失敗時主動列出這幾個選項。
+
+### Windows PowerShell 噴 ExecutionPolicy 錯誤
+**原因**：PowerShell 預設禁止執行未簽名 `.ps1`。
+
+**修復**（管理員 PowerShell 一次性設定）：
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### 沒有 Node.js / npm
+**修復**：先裝 Node.js（建議 LTS）：
+- Windows / macOS：https://nodejs.org/
+- Linux：用 distro 套件管理（`apt install nodejs npm` / `dnf install nodejs` 等）
+
+裝好後重跑 bootstrap。
+
+### 完全沒跑 bootstrap，純手動 git clone
+最少要做：
+```bash
+cd <repo>/ai-guardian
+npm install
+```
+然後加 alias 或 npm link。詳見上方「找不到指令」。

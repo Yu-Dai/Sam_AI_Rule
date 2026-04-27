@@ -34,15 +34,38 @@ fi
 echo "[ai-guardian] 安裝依賴..."
 cd "$INSTALL_DIR/ai-guardian"
 npm install
+if [ $? -ne 0 ]; then
+  echo "[error] npm install 失敗，請檢查網路或 npm 設定後重試。" >&2
+  exit 1
+fi
 
-echo "[ai-guardian] 註冊為全域指令（npm link 可能需要 sudo）..."
+echo "[ai-guardian] 嘗試 npm link 註冊全域指令..."
+set +e
 npm link
+LINK_EXIT=$?
+set -e
 
 echo
-echo "完成！"
-echo "  Sam_AI_Rule 路徑：$INSTALL_DIR"
-echo "  ai-guardian 已註冊為全域指令"
-echo
-echo "新專案初始化："
-echo "  cd <new-project>"
-echo "  bash $INSTALL_DIR/init-project.sh"
+if [ "$LINK_EXIT" -eq 0 ]; then
+  echo "完成！全域指令 'ai-guardian' 已註冊。"
+  echo "  Sam_AI_Rule 路徑：$INSTALL_DIR"
+  echo
+  echo "新專案初始化："
+  echo "  cd <new-project>"
+  echo "  bash $INSTALL_DIR/init-project.sh"
+else
+  echo "⚠️  npm link 失敗（exit code: $LINK_EXIT）。常見原因：權限不足。"
+  echo "依賴已安裝完成，但全域指令未註冊。請從以下擇一："
+  echo
+  echo "選項 A：以 sudo 重新註冊"
+  echo "  cd $INSTALL_DIR/ai-guardian && sudo npm link"
+  echo
+  echo "選項 B：手動加 alias 到 shell profile（不需要 sudo）"
+  echo "  在 ~/.bashrc 或 ~/.zshrc 加入下面這行："
+  echo "  alias ai-guardian='node $INSTALL_DIR/ai-guardian/bin/cli.js'"
+  echo
+  echo "選項 C：每次用完整路徑呼叫"
+  echo "  node $INSTALL_DIR/ai-guardian/bin/cli.js <command>"
+  echo
+  echo "Sam_AI_Rule 路徑：$INSTALL_DIR"
+fi

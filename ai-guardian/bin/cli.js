@@ -3,6 +3,24 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+
+// Pre-flight: 檢查依賴是否已安裝
+const nodeModulesPath = path.join(__dirname, '..', 'node_modules');
+if (!fs.existsSync(nodeModulesPath)) {
+  console.error('');
+  console.error('❌ ai-guardian 依賴尚未安裝（缺少 node_modules）。');
+  console.error('');
+  console.error('修復方式：');
+  console.error('  cd ' + path.resolve(__dirname, '..'));
+  console.error('  npm install');
+  console.error('');
+  console.error('或執行 Sam_AI_Rule 的 bootstrap 一鍵安裝：');
+  console.error('  bash $HOME/Sam_AI_Rule/bootstrap.sh        # Linux/Mac/git bash');
+  console.error('  & "$HOME\\Sam_AI_Rule\\bootstrap.ps1"     # Windows PowerShell');
+  console.error('');
+  process.exit(1);
+}
+
 const { initProject } = require('../src/initCommand');
 const { runGuard } = require('../src/guardCommand');
 const { runStart } = require('../src/startCommand');
