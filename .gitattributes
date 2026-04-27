@@ -1,0 +1,19 @@
+# Default: 自動偵測文字檔，依平台正規化行尾
+* text=auto
+
+# Shell scripts: 必須 LF（bash 在 Windows 上對 CRLF 行尾會 silently 出包）
+*.sh text eol=lf
+
+# PowerShell scripts: CRLF（Windows 原生，PS 5.1 對行尾較寬容但 CRLF 最穩）
+*.ps1 text eol=crlf
+
+# Markdown / JSON / 設定檔: 文字
+*.md   text
+*.json text
+
+# 二進位檔（保險）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
