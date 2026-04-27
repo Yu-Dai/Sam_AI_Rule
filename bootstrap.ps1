@@ -10,6 +10,7 @@
 $ErrorActionPreference = 'Stop'
 
 # 強制 UTF-8 console encoding（避免繁中 Write-Host 在 PS 5.1 顯示亂碼）
+chcp 65001 | Out-Null
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 
