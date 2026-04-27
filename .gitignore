@@ -1,0 +1,42 @@
+# === Node.js (主要為 ai-guardian) ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+.npm
+
+# === ai-guardian 執行時產物（若於本 repo 自我測試會產生） ===
+.guardian/
+
+# === OS 產生的雜訊 ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === 編輯器 / IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === 環境變數 / 密鑰（防呆） ===
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+credentials.json
+
+# === Build / 輸出產物 ===
+dist/
+build/
+out/
+
+# === 測試覆蓋率 ===
+coverage/
+*.lcov
+
+# === 本機個人草稿（不入庫） ===
+*.local.md

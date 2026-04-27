@@ -1,0 +1,33 @@
+{
+  "name": "ai-guardian",
+  "version": "1.0.0",
+  "description": "Zero-friction AI development immune system. Enforces codebase integrity, static AST checks, and logic clone detection.",
+  "main": "bin/cli.js",
+  "bin": {
+    "ai-guardian": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ai",
+    "guardian",
+    "ast",
+    "linter",
+    "cli",
+    "agent",
+    "code-review",
+    "clone-detection"
+  ],
+  "author": "Antigravity Pair",
+  "license": "ISC",
+  "dependencies": {
+    "@babel/generator": "^7.29.1",
+    "@babel/parser": "^7.29.2",
+    "@babel/traverse": "^7.29.0"
+  }
+}

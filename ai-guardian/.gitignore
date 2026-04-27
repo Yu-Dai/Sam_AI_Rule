@@ -1,0 +1,5 @@
+node_modules/
+.guardian/reports/
+.guardian/archive/
+.guardian/lab/
+tests/
