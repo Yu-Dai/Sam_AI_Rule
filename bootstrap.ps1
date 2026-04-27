@@ -48,6 +48,10 @@ try {
         throw "npm install 失敗（exit code: $code），請檢查網路或 npm 設定後重試。"
     }
 
+    Write-Host "[ai-guardian] 清理可能的 stale link（避免 wrapper 沒被重建）..." -ForegroundColor Cyan
+    npm uninstall -g ai-guardian | Out-Null
+    $LASTEXITCODE = 0
+
     Write-Host "[ai-guardian] 嘗試 npm link 註冊全域指令..." -ForegroundColor Cyan
     npm link
     $linkExitCode = $LASTEXITCODE

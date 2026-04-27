@@ -50,6 +50,9 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+echo "[ai-guardian] 清理可能的 stale link（避免 wrapper 沒被重建）..."
+npm uninstall -g ai-guardian 2>/dev/null || true
+
 echo "[ai-guardian] 嘗試 npm link 註冊全域指令..."
 set +e
 npm link
