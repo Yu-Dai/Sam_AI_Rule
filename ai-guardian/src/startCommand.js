@@ -3,8 +3,10 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { buildFileSnapshot } = require('./utils/fileSnapshot');
 const { syncGitignoreToConfig } = require('./utils/syncGitignore');
+const { checkRemoteSync, STATUS: SYNC_STATUS } = require('./utils/syncCheck');
 
-function runStart(projectRoot, taskDescription) {
+async function runStart(projectRoot, taskDescription, options = {}) {
+  const { forceStale = false } = options;
   if (!taskDescription || taskDescription.trim() === '') {
     console.error('❌ 請提供任務描述！用法: ai-guardian start "<任務描述>"');
     process.exit(1);
@@ -106,11 +108,14 @@ function runStart(projectRoot, taskDescription) {
         '.guardian/debate.json',
         '.guardian/cto_attack.md',
         '.guardian/defense_arch.md',
+        '.guardian/state/',
       ];
       const isGuardianOwned = line => {
         const filePath = line.slice(3).replace(/^"|"$/g, '').trim();
         return GUARDIAN_TRANSIENT.some(p =>
-          filePath === p || filePath.startsWith('.guardian/archive/')
+          filePath === p ||
+          filePath.startsWith('.guardian/archive/') ||
+          filePath.startsWith('.guardian/state/')
         );
       };
 
@@ -125,6 +130,7 @@ function runStart(projectRoot, taskDescription) {
           '.guardian/current-task.json', '.guardian/current-task.md',
           '.guardian/HOTFIX_MODE', '.guardian/audit.log', '.guardian/archive/',
           '.guardian/debate.json', '.guardian/cto_attack.md', '.guardian/defense_arch.md',
+          '.guardian/state/',
         ].join('\n');
         const gitignorePath = path.join(projectRoot, '.gitignore');
         const existing = fs.existsSync(gitignorePath) ? fs.readFileSync(gitignorePath, 'utf-8') : '';
@@ -166,6 +172,20 @@ function runStart(projectRoot, taskDescription) {
     console.log('🚨 [急診模式啟動]：已自動豁免 AST 指紋掃描與平行實驗室限制。這必定是緊急修復。');
   } else {
     if (fs.existsSync(hotfixFlagPath)) fs.unlinkSync(hotfixFlagPath);
+  }
+
+  // 2.5 遠端同步檢查（hotfix 模式跳過——救火優先）
+  if (isHotfix) {
+    console.log('ℹ️  [sync-check] hotfix 模式跳過遠端偵測。');
+  } else {
+    const syncResult = await checkRemoteSync(projectRoot, {
+      strict: false,
+      forceStale,
+      taskContext: taskDescription
+    });
+    if (syncResult.status === SYNC_STATUS.ABORTED) {
+      process.exit(1);
+    }
   }
 
   // 3. 強制建立並切換到 guardian/ branch

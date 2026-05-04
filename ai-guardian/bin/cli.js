@@ -101,15 +101,18 @@ async function main() {
     }
 
   } else if (command === 'start') {
-    const taskDescription = process.argv.slice(3).join(' ');
-    runStart(process.cwd(), taskDescription);
+    const args = process.argv.slice(3);
+    const forceStale = args.includes('--force-stale');
+    const taskDescription = args.filter(a => a !== '--force-stale').join(' ');
+    await runStart(process.cwd(), taskDescription, { forceStale });
 
   } else if (command === 'review') {
     const isForce = process.argv.includes('--force');
     runReview(process.cwd(), isForce);
 
   } else if (command === 'finish') {
-    runFinish(process.cwd());
+    const forceStale = process.argv.includes('--force-stale');
+    await runFinish(process.cwd(), { forceStale });
 
   } else if (command === 'debate') {
     const subCommand = process.argv[3];
@@ -163,10 +166,14 @@ async function main() {
   ④ git commit                      - 審查通過後才能提交
   ⑤ ai-guardian finish              - 任務結束，自動合併主線並清理現場
 
+【遠端同步旗標（start / finish 共用）】
+  --force-stale                - 知情下繞過遠端落後檢查，繼續執行
+                                 (start 會記錄決策，下次同版本不再問；finish 為一次性)
+
 【環境與突發指令】
   ai-guardian init             - 初始化專案防禦網 (建立沙盒與全域規則)
   ai-guardian adopt            - 中途接手專案 (建立你的本機 IDE 防護設定檔與 Git Hook)
-  ai-guardian start hotfix     - [急診模式] 繞過所有審查，執行緊急修護
+  ai-guardian start hotfix     - [急診模式] 繞過所有審查，執行緊急修護（含 sync-check）
   ai-guardian guard            - 手動掃描 AST (通常由 git pre-commit hook 自動執行)
   ai-guardian debate reset     - [解鎖] 清除卡住的法庭狀態，解除 Commit 封鎖
 

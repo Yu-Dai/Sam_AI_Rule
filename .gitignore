@@ -61,3 +61,4 @@ coverage/
 .guardian/debate.json
 .guardian/cto_attack.md
 .guardian/defense_arch.md
+.guardian/state/

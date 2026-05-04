@@ -331,6 +331,7 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
     '.guardian/debate.json',
     '.guardian/cto_attack.md',
     '.guardian/defense_arch.md',
+    '.guardian/state/',
   ].join('\n');
 
   const gitignorePath = path.join(targetDir, '.gitignore');
@@ -391,6 +392,7 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
       '.guardian/HOTFIX_MODE',
       '.guardian/audit.log',
       '.guardian/debate.json',
+      '.guardian/state',
     ];
     for (const p of ghostPaths) {
       try {

@@ -1,8 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { checkRemoteSync, STATUS: SYNC_STATUS } = require('./utils/syncCheck');
 
-function runFinish(projectRoot) {
+async function runFinish(projectRoot, options = {}) {
+  const { forceStale = false } = options;
   const guardianDir = path.join(projectRoot, '.guardian');
   const manifestPath = path.join(guardianDir, 'current-task.json');
 
@@ -19,6 +21,21 @@ function runFinish(projectRoot) {
   if (!manifest.reviewPassed) {
     console.error('❌ 任務尚未通過審查！請先執行 ai-guardian review。');
     process.exit(1);
+  }
+
+  // 2.5 遠端同步檢查（嚴格模式：不記決策；hotfix 模式跳過全程護欄）
+  const isHotfix = fs.existsSync(path.join(guardianDir, 'HOTFIX_MODE'));
+  if (isHotfix) {
+    console.log('ℹ️  [sync-check] hotfix 模式跳過遠端偵測。');
+  } else {
+    const syncResult = await checkRemoteSync(projectRoot, {
+      strict: true,
+      forceStale,
+      taskContext: manifest.taskDescription
+    });
+    if (syncResult.status === SYNC_STATUS.ABORTED) {
+      process.exit(1);
+    }
   }
 
   console.log(`\n🏁 AI Guardian 任務完結程序啟動...`);
