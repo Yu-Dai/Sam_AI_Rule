@@ -123,6 +123,10 @@ async function main() {
     const { runAbort } = require('../src/abortCommand');
     await runAbort(process.cwd(), { yes: isYes });
 
+  } else if (command === 'self-update') {
+    const { runSelfUpdate } = require('../src/selfUpdateCommand');
+    runSelfUpdate(process.cwd());
+
   } else if (command === 'debate') {
     const subCommand = process.argv[FIRST_TASK_ARG_INDEX];
     const { runDebate } = require('../src/debateCommand');
@@ -184,6 +188,7 @@ async function main() {
   ai-guardian adopt            - 中途接手專案 (建立你的本機 IDE 防護設定檔與 Git Hook)
   ai-guardian start hotfix     - [急診模式] 繞過所有審查，執行緊急修護（含 sync-check）
   ai-guardian abort [--yes]    - [反悔退出] 丟棄當前任務、刪除分支、回到主線（保留未 commit 改動）
+  ai-guardian self-update      - [開發者用] 從當前 source repo 同步 src + bin 到全域安裝
   ai-guardian guard            - 手動掃描 AST (通常由 git pre-commit hook 自動執行)
   ai-guardian debate reset     - [解鎖] 清除卡住的法庭狀態，解除 Commit 封鎖
 
