@@ -4,7 +4,17 @@ const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const generate = require('@babel/generator').default;
 const crypto = require('crypto');
-const { syncGitignoreToConfig } = require('./utils/syncGitignore');
+const { diffAgainstBaseline } = require('./utils/gitBaseline');
+
+// fallback 全量掃描時用的最小硬編忽略集——只擋技術產物，不再讀 ai-guardian.json::ignoreDirs。
+// 差異掃描走 git diff，本來就尊重 .gitignore，不會掃這些路徑。
+const FALLBACK_IGNORE = new Set([
+  'node_modules', '.git', '.guardian', 'dist', 'build',
+  '.idea', '.vscode', '__pycache__', 'coverage', 'out',
+]);
+
+// AST 雷同偵測的最小函式行數門檻：低於此值的小函式不參與指紋比對
+const MIN_FUNCTION_LINES_FOR_FINGERPRINT = 3;
 
 async function runGuard(projectRoot) {
   const errors = [];
@@ -42,42 +52,23 @@ async function runGuard(projectRoot) {
     return { success: true, errors: [] };
   }
 
-  // 1. 設定檔讀取，並同步 .gitignore → ai-guardian.json ignoreDirs（持久化）
-  //    取代舊的 in-memory 合併，確保每個指令都使用一致的忽略清單
+  // 1. 設定檔讀取——只取 productionDirs，ignoreDirs 已棄用（改由 .gitignore 統一管理）
   const configPath = path.join(projectRoot, 'ai-guardian.json');
   let config = {
     mode: 'standard',
     productionDirs: ['src/production'],
     labDir: 'src/lab',
     archiveDir: 'src/archive',
-    ignoreDirs: ['node_modules', '.git', '.guardian', 'dist', 'build']
   };
 
   if (fs.existsSync(configPath)) {
-    try { config = JSON.parse(fs.readFileSync(configPath, 'utf-8')); } catch (e) {}
+    try { config = { ...config, ...JSON.parse(fs.readFileSync(configPath, 'utf-8')) }; } catch (e) {}
   }
 
-  // syncGitignoreToConfig 會將 .gitignore 新增條目 append 到 ai-guardian.json，
-  // 並回傳合併後的 ignoreDirs（已持久化，下次不需再同步）
-  config.ignoreDirs = syncGitignoreToConfig(projectRoot);
-
-  // 2. 忽略規則說明：
-  //    ignoreDirs 支援兩種格式：
-  //    (a) 純目錄名稱 → 如 "node_modules"，任何層級的同名目錄都忽略
-  //    (b) 相對路徑前綴 → 如 "src/agent/test"，只忽略這個特定路徑（含其子目錄）
-  function shouldIgnore(fullPath) {
-    const relPath = path.relative(projectRoot, fullPath).replace(/\\/g, '/');
+  // 2. fallback 走訪：技術產物路徑硬編排除，不再讀 config.ignoreDirs
+  function shouldIgnoreFallback(fullPath) {
     const baseName = path.basename(fullPath);
-    return config.ignoreDirs.some(ignore => {
-      const normalizedIgnore = ignore.replace(/\\/g, '/').replace(/\/$/, '');
-      if (!normalizedIgnore.includes('/')) {
-        // (a) 純名稱比對：任意層級
-        return baseName === normalizedIgnore;
-      } else {
-        // (b) 相對路徑前綴比對：路徑完全吻合，或是其子目錄
-        return relPath === normalizedIgnore || relPath.startsWith(normalizedIgnore + '/');
-      }
-    });
+    return FALLBACK_IGNORE.has(baseName);
   }
 
   function walkFiles(dir, callback) {
@@ -86,7 +77,7 @@ async function runGuard(projectRoot) {
     try { items = fs.readdirSync(dir); } catch (e) { return; }
     for (const name of items) {
       const fullPath = path.join(dir, name);
-      if (shouldIgnore(fullPath)) continue;
+      if (shouldIgnoreFallback(fullPath)) continue;
       let stat;
       try { stat = fs.statSync(fullPath); } catch (e) { continue; }
       if (stat.isDirectory()) walkFiles(fullPath, callback);
@@ -102,27 +93,28 @@ async function runGuard(projectRoot) {
   if (fs.existsSync(manifestPath)) {
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-      const oldSnapshot = manifest.fileSnapshot || {};
-      const changedFiles = new Set();
 
-      // 掃描目前專案取得新快照，找出新增與修改的檔案
-      // 傳入 config.ignoreDirs 確保自訂忽略路徑在快照比對中也生效
-      const { buildFileSnapshot } = require('./utils/fileSnapshot');
-      const newSnapshot = buildFileSnapshot(projectRoot, config.ignoreDirs || []);
-      for (const [relPath, hash] of Object.entries(newSnapshot)) {
-        if (!oldSnapshot[relPath] || oldSnapshot[relPath] !== hash) {
-          changedFiles.add(path.join(projectRoot, relPath));
+      if (!manifest.baselineCommit) {
+        console.log('⚠️  [AI Guardian] 任務宣言為舊版 fileSnapshot 格式，無法以 git diff 比對，退化為全量掃描。');
+      } else {
+        const diff = diffAgainstBaseline(projectRoot, manifest.baselineCommit);
+        const changedRels = [
+          ...diff.added,
+          ...diff.modified,
+          ...diff.typeChanged,
+          ...diff.renamed.map(r => r.to),
+        ];
+        const changedFiles = new Set(changedRels.map(rel => path.join(projectRoot, rel)));
+        scanTargetSet = changedFiles;
+
+        if (changedFiles.size === 0) {
+          console.log('ℹ️  [AI Guardian] 未偵測到任務啟動後有任何檔案變更，跳過 AST 掃描。');
+          return { success: true, errors: [] };
         }
+        console.log(`🔍 [AI Guardian] 差異掃描模式：本次任務共變更 ${changedFiles.size} 個檔案。`);
       }
-      scanTargetSet = changedFiles;
-
-      if (changedFiles.size === 0) {
-        console.log('ℹ️  [AI Guardian] 未偵測到任務啟動後有任何檔案變更，跳過 AST 掃描。');
-        return { success: true, errors: [] };
-      }
-      console.log(`🔍 [AI Guardian] 差異掃描模式：本次任務共變更 ${changedFiles.size} 個檔案。`);
     } catch (e) {
-      console.log('⚠️  [AI Guardian] 無法讀取任務宣言，退化為全量掃描。');
+      console.log(`⚠️  [AI Guardian] 無法讀取任務宣言或 git diff 失敗（${e.message}），退化為全量掃描。`);
     }
   } else {
     console.log('⚠️  [AI Guardian] 未偵測到任務宣言（current-task.json），執行全量掃描。建議先執行 ai-guardian start。');
@@ -152,7 +144,7 @@ async function runGuard(projectRoot) {
       traverse(ast, {
         "FunctionDeclaration|FunctionExpression|ArrowFunctionExpression"(nodePath) {
           // 只偵測「有一定規模」的函數 (例如超過 5 行或 15 個節點)
-          if (nodePath.node.loc.end.line - nodePath.node.loc.start.line < 3) return;
+          if (nodePath.node.loc.end.line - nodePath.node.loc.start.line < MIN_FUNCTION_LINES_FOR_FINGERPRINT) return;
 
           // 使用「去骨」策略：將所有 Identifiers (變數名) 替換為統一標記
           // 這樣不管你叫 order 還是 invoice，去骨後都叫 _ID_

@@ -1,9 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { buildFileSnapshot } = require('./utils/fileSnapshot');
-const { syncGitignoreToConfig } = require('./utils/syncGitignore');
+const { createBaseline } = require('./utils/gitBaseline');
 const { checkRemoteSync, STATUS: SYNC_STATUS } = require('./utils/syncCheck');
+
+// git status --porcelain 每行前綴：兩個狀態字元 + 一個空白
+const STATUS_PORCELAIN_PREFIX_LEN = 3;
+// 任務分支 slug 最大長度，避免 ref name 過長
+const MAX_SLUG_LENGTH = 40;
+// ISO 日期 (YYYY-MM-DD) 字串長度，用於 toISOString().slice(0, ?)
+const ISO_DATE_LENGTH = 10;
+// JSON.stringify 縮排寬度
+const JSON_INDENT = 2;
 
 async function runStart(projectRoot, taskDescription, options = {}) {
   const { forceStale = false } = options;
@@ -87,13 +95,10 @@ async function runStart(projectRoot, taskDescription, options = {}) {
 
   // [P3-b] 處理 guardian 暫存檔的 gitignore 遺漏問題（自動修正）
   //
-  // 設計說明（Option C）：
+  // 設計說明：
   //   一般的未提交改動不再阻擋 start。
-  //   buildFileSnapshot 記錄的是當下 filesystem 的 hash，
-  //   pre-existing dirty 檔案的 hash 就成為 baseline——
-  //     · AI 任務期間沒改它 → review 不會報告它  ✓
-  //     · AI 改了它         → review 只報告 AI 改的部分  ✓
-  //   snapshot 邏輯本身已正確吸收 pre-existing 狀態，攔截是多餘的。
+  //   createBaseline 把當下工作區（含 pre-existing dirty）凍結成 git commit，
+  //   review 用 git diff 對比，pre-existing 改動自然落在 baseline 內、不會被誤報。
   try {
     const dirty = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
     if (dirty) {
@@ -111,7 +116,7 @@ async function runStart(projectRoot, taskDescription, options = {}) {
         '.guardian/state/',
       ];
       const isGuardianOwned = line => {
-        const filePath = line.slice(3).replace(/^"|"$/g, '').trim();
+        const filePath = line.slice(STATUS_PORCELAIN_PREFIX_LEN).replace(/^"|"$/g, '').trim();
         return GUARDIAN_TRANSIENT.some(p =>
           filePath === p ||
           filePath.startsWith('.guardian/archive/') ||
@@ -193,8 +198,8 @@ async function runStart(projectRoot, taskDescription, options = {}) {
     .toLowerCase()
     .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 40);
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    .slice(0, MAX_SLUG_LENGTH);
+  const date = new Date().toISOString().slice(0, ISO_DATE_LENGTH).replace(/-/g, '');
   const branchName = `guardian/${slug}-${date}`;
 
   try {
@@ -211,21 +216,19 @@ async function runStart(projectRoot, taskDescription, options = {}) {
     }
   }
 
-  // 4. 同步 .gitignore → ai-guardian.json ignoreDirs，確保 snapshot 基準尊重最新設定
-  //    AI 若改了 .gitignore，下次 start 時 snapshot 就會自動排除對應路徑
-  const userIgnoreDirs = syncGitignoreToConfig(projectRoot);
-
-  // 5. 建立任務宣言
+  // 4. 建立任務宣言
+  //    baselineCommit 是用 git plumbing 凍結的游離 commit，代表「任務開始當下」的工作區狀態。
+  //    review/guard 用 git diff 跟它比對，自動尊重 .gitignore、不限副檔名、不污染主 index。
   const now = new Date().toISOString();
   const taskManifest = {
     taskDescription,
     branch: branchName,
     startedAt: now,
     reviewPassed: false,
-    fileSnapshot: buildFileSnapshot(projectRoot, userIgnoreDirs)
+    baselineCommit: createBaseline(projectRoot, slug || 'task')
   };
 
-  fs.writeFileSync(manifestPath, JSON.stringify(taskManifest, null, 2), 'utf-8');
+  fs.writeFileSync(manifestPath, JSON.stringify(taskManifest, null, JSON_INDENT), 'utf-8');
 
   // [P5] current-task.md 精簡版：只含任務專屬資訊，永久規則已在 AGENTS.md / IDE rules 中
   const manifestMd = `# 🛡️ AI Guardian 任務宣言

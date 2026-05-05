@@ -1,8 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
-const { buildFileSnapshot, IGNORE_DIRS } = require('./utils/fileSnapshot');
-const { syncGitignoreToConfig } = require('./utils/syncGitignore');
+const { diffAgainstBaseline } = require('./utils/gitBaseline');
+
+// 補丁警告中顯示前 N 個 match 樣本
+const MATCH_PREVIEW_COUNT = 2;
+// JSON.stringify 縮排寬度
+const JSON_INDENT = 2;
 
 function runReview(projectRoot, force = false) {
   const guardianDir = path.join(projectRoot, '.guardian');
@@ -16,33 +20,20 @@ function runReview(projectRoot, force = false) {
   }
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+
+  // 舊版 manifest（fileSnapshot 格式）阻擋——機制已升級為 git-native diff，雙軌共存會誤判
+  if (!manifest.baselineCommit) {
+    console.error('❌ [格式升級] 此任務的 manifest 是舊版 fileSnapshot 格式，無法以新版 review 比對。');
+    console.error('   請完結這個任務（手動 git commit + git checkout main），或刪除 .guardian/current-task.json 後重新 ai-guardian start。');
+    process.exit(1);
+  }
+
   console.log(`\n📋 AI Guardian 改動審查報告`);
   console.log(`================================`);
   console.log(`任務：${manifest.taskDescription}`);
   console.log(`分支：${manifest.branch}`);
   console.log(`開始：${manifest.startedAt}`);
   console.log(`================================\n`);
-
-  // 讀取使用者自訂的 ignoreDirs，並自動同步 .gitignore 中的新增條目
-  // （確保 AI 改 .gitignore 後，guardian 掃描也跟著忽略對應路徑）
-  const userIgnoreDirs = syncGitignoreToConfig(projectRoot);
-  const allIgnoreDirs = [...new Set([...IGNORE_DIRS, ...userIgnoreDirs])];
-
-  // 判斷某個相對路徑是否應被忽略（支援純名稱與路徑前綴兩種格式）
-  function shouldSkipRelPath(relPath) {
-    const normalizedRel = relPath.replace(/\\/g, '/');
-    const parts = normalizedRel.split('/');
-    return allIgnoreDirs.some(ignore => {
-      const normalized = ignore.replace(/\\/g, '/').replace(/\/$/, '');
-      if (!normalized.includes('/')) {
-        // 純名稱：只要路徑中任一層段吻合就忽略
-        return parts.includes(normalized);
-      } else {
-        // 相對路徑前綴比對
-        return normalizedRel === normalized || normalizedRel.startsWith(normalized + '/');
-      }
-    });
-  }
 
   const warnings = [];
   const errors = [];
@@ -68,33 +59,22 @@ function runReview(projectRoot, force = false) {
     infos.push('✅ 分支正確: ' + currentBranch);
   }
 
-  // 3. 比對檔案快照，列出改動清單
-  //    buildFileSnapshot 現在同時接受 userIgnoreDirs，確保快照也尊重使用者設定
-  const oldSnapshot = manifest.fileSnapshot || {};
-  const newSnapshot = buildFileSnapshot(projectRoot, userIgnoreDirs);
-
-  const added = [];
-  const modified = [];
-  const deleted = [];
-
-  for (const [relPath, hash] of Object.entries(newSnapshot)) {
-    if (shouldSkipRelPath(relPath)) continue; // 雙重保險：snapshot 已過濾，但防止 config 更新後的邊界情況
-    if (!oldSnapshot[relPath]) {
-      added.push(relPath);
-    } else if (oldSnapshot[relPath] !== hash) {
-      modified.push(relPath);
-    }
+  // 3. 用 git diff 比對 baseline commit 與當下工作區
+  //    自動尊重 .gitignore、不限副檔名、認得 rename
+  let diff;
+  try {
+    diff = diffAgainstBaseline(projectRoot, manifest.baselineCommit);
+  } catch (e) {
+    console.error(`❌ [diff 失敗] 無法跟 baseline (${manifest.baselineCommit}) 比對：${e.message}`);
+    console.error('   baseline commit 可能已被 git gc 回收，或當前不在 git repo。');
+    process.exit(1);
   }
 
-  for (const relPath of Object.keys(oldSnapshot)) {
-    if (shouldSkipRelPath(relPath)) continue;
-    if (!newSnapshot[relPath]) {
-      deleted.push(relPath);
-    }
-  }
+  const { added, modified, deleted, renamed, typeChanged } = diff;
+  const totalChanges = added.length + modified.length + deleted.length + renamed.length + typeChanged.length;
 
-  if (added.length === 0 && modified.length === 0 && deleted.length === 0) {
-    warnings.push(`⚠️ 未偵測到任何改動，你確定完成任務了嗎？`);
+  if (totalChanges === 0) {
+    warnings.push(`⚠️ 未偵測到任何改動（git diff 回報 baseline 與當下完全一致）。請確認你的 edit 是否真的寫入磁碟。`);
   }
 
   if (added.length > 0) {
@@ -109,13 +89,36 @@ function runReview(projectRoot, force = false) {
     infos.push(`\n🗑️  刪除檔案 (${deleted.length}):`);
     deleted.forEach(f => infos.push(`   - ${f}`));
   }
+  if (renamed.length > 0) {
+    infos.push(`\n🔀 重新命名 (${renamed.length}):`);
+    renamed.forEach(r => infos.push(`   ${r.from} → ${r.to}`));
+  }
+  if (typeChanged.length > 0) {
+    infos.push(`\n🔧 類型變更 (${typeChanged.length}):`);
+    typeChanged.forEach(f => infos.push(`   * ${f}`));
+  }
 
   // 4. 流程合理性回饋：分析本次實際改動的檔案類型，告訴 AI 下次是否需要走 guardian 流程
   //    這是「事後學習」閉環的關鍵：即使 AI 這次選錯了流程，review 會糾正認知
   {
-    const allChangedPaths = [...added, ...modified, ...deleted];
-    const CODE_EXTS = new Set(['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.go',
-                                '.dart', '.vue', '.svelte', '.rs', '.kt', '.swift', '.rb', '.php']);
+    const allChangedPaths = [
+      ...added, ...modified, ...deleted, ...typeChanged,
+      ...renamed.flatMap(r => [r.from, r.to])
+    ];
+    // 涵蓋常見遊戲 / 嵌入式 / 後端 / 前端 / 設定檔，避免 Godot / Rust / Web 純 .css / 純 package.json
+    // 這類任務被誤分類為「非程式碼」
+    const CODE_EXTS = new Set([
+      '.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte', '.astro',
+      '.html', '.css', '.scss', '.less',
+      '.py', '.java', '.cs', '.go', '.rs', '.rb', '.php',
+      '.kt', '.swift', '.dart',
+      '.c', '.cpp', '.cc', '.h', '.hpp', '.m', '.mm',
+      '.ex', '.exs', '.clj', '.scala', '.ml', '.fs',
+      '.gd', '.gdshader', '.lua', '.shader',
+      '.sql',
+      '.sh', '.ps1', '.bat',
+      '.json', '.yml', '.yaml', '.toml',
+    ]);
     const DOC_EXTS  = new Set(['.md', '.txt', '.rst', '.mdx']);
 
     const isRulesFile = f => {
@@ -153,9 +156,6 @@ function runReview(projectRoot, force = false) {
   const codeExts = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.go', '.dart', '.vue', '.svelte'];
 
   for (const relPath of allChanged) {
-    // 使用統一的路徑過濾函數（支援路徑前綴，不再只比對名稱段）
-    if (shouldSkipRelPath(relPath)) continue;
-
     const ext = path.extname(relPath);
     if (!codeExts.includes(ext)) continue;
 
@@ -175,7 +175,7 @@ function runReview(projectRoot, force = false) {
       const matches = content.match(pattern);
       if (matches && matches.length > 0) {
         const labels = ['補丁型 if 判斷', '模式切換 if', '危險技術債注釋', '強制過期標籤'];
-        warnings.push(`⚠️  [疑似補丁] ${relPath} 發現 ${matches.length} 處 ${labels[i]}：${matches.slice(0, 2).join(', ')}`);
+        warnings.push(`⚠️  [疑似補丁] ${relPath} 發現 ${matches.length} 處 ${labels[i]}：${matches.slice(0, MATCH_PREVIEW_COUNT).join(', ')}`);
       }
     });
 
@@ -216,8 +216,14 @@ function runReview(projectRoot, force = false) {
   // 6. 更新宣言：標記審查已通過
   manifest.reviewPassed = true;
   manifest.reviewedAt = new Date().toISOString();
-  manifest.changeSummary = { added: added.length, modified: modified.length, deleted: deleted.length };
-  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  manifest.changeSummary = {
+    added: added.length,
+    modified: modified.length,
+    deleted: deleted.length,
+    renamed: renamed.length,
+    typeChanged: typeChanged.length,
+  };
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, JSON_INDENT), 'utf-8');
 
   // 7. AI 自我審計清單
   //    自動工具守語法，這一關守語意。
@@ -225,7 +231,9 @@ function runReview(projectRoot, force = false) {
   const changedFiles = [
     ...added.map(f => `+ ${f}`),
     ...modified.map(f => `~ ${f}`),
-    ...deleted.map(f => `- ${f}`)
+    ...deleted.map(f => `- ${f}`),
+    ...renamed.map(r => `R ${r.from} → ${r.to}`),
+    ...typeChanged.map(f => `* ${f}`),
   ];
 
   console.log('');
