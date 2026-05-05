@@ -26,6 +26,8 @@ const crypto = require('crypto');
 
 // temp index 檔名的隨機後綴位元組數：12 hex chars 足以避免並行 ai-guardian 進程碰撞
 const TEMP_SUFFIX_BYTES = 6;
+// parseInt 顯式 radix
+const DECIMAL_RADIX = 10;
 
 // commit-tree 需要 author / committer 資訊，顯式傳避免依賴 user.name/email 設定
 const BASELINE_AUTHOR_ENV = {
@@ -161,7 +163,87 @@ function parseNameStatusZ(output) {
   return result;
 }
 
+/**
+ * 對每個改動的檔案，回傳「相對 baseline 而言新增的行號集合」。
+ * 用於 guard 的 line-level attribution：避免 pre-existing 違規連坐到 AI 的本次任務。
+ *
+ * @param {string} projectRoot
+ * @param {string} baselineCommit
+ * @returns {Map<string, Set<number>>}  relPath → 新行號 (1-based)
+ */
+function getNewLinesPerFile(projectRoot, baselineCommit) {
+  return withTempIndex(projectRoot, ({ env }) => {
+    const currentTree = git(['write-tree'], { cwd: projectRoot, env }).trim();
+    const output = git(
+      [
+        'diff',
+        '--unified=0',
+        '--no-color',
+        '--no-renames',
+        `${baselineCommit}^{tree}`,
+        currentTree,
+      ],
+      { cwd: projectRoot }
+    );
+    return parseUnifiedDiffPerFile(output);
+  });
+}
+
+/**
+ * 解析 git diff --unified=0 輸出，回傳每個檔案的「新行號集合」。
+ *
+ * 處理：
+ *   - diff --git 行：擷取 b-side 路徑（current 端）
+ *   - @@ -X,Y +A,B @@：A 是 new file 的起始行號，B 是新增行數
+ *   - + 行：加進新行號集合，currentLine++
+ *   - - 行：略過（不影響新檔行號）
+ *   - context 行：理論上 --unified=0 沒有，但保險還是處理
+ */
+function parseUnifiedDiffPerFile(output) {
+  const result = new Map();
+  let currentFile = null;
+  let currentLine = 0;
+  let inHunk = false;
+
+  for (const line of output.split('\n')) {
+    if (line.startsWith('diff --git')) {
+      // diff --git "?a/path"? "?b/path"? — 用 named capture group 取 b 側路徑
+      const m = line.match(/^diff --git "?a\/(?<aPath>.+?)"? "?b\/(?<bPath>.+?)"?$/);
+      currentFile = m ? m.groups.bPath : null;
+      if (currentFile && !result.has(currentFile)) {
+        result.set(currentFile, new Set());
+      }
+      inHunk = false;
+      continue;
+    }
+    if (line.startsWith('@@')) {
+      // @@ -N(,M)? +A(,B)? @@
+      const hunkMatch = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+      if (hunkMatch) {
+        currentLine = parseInt(hunkMatch[1], DECIMAL_RADIX);
+        inHunk = true;
+      } else {
+        inHunk = false;
+      }
+      continue;
+    }
+    if (!inHunk || !currentFile) continue;
+    if (line.startsWith('+++') || line.startsWith('---')) continue;
+    if (line.startsWith('+')) {
+      result.get(currentFile).add(currentLine);
+      currentLine++;
+    } else if (line.startsWith('-')) {
+      // 不增加 new file 行號
+    } else if (line.length > 0) {
+      // context 行（--unified=0 應該沒有）
+      currentLine++;
+    }
+  }
+  return result;
+}
+
 module.exports = {
   createBaseline,
   diffAgainstBaseline,
+  getNewLinesPerFile,
 };

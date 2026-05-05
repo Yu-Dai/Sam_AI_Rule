@@ -4,7 +4,7 @@ const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const generate = require('@babel/generator').default;
 const crypto = require('crypto');
-const { diffAgainstBaseline } = require('./utils/gitBaseline');
+const { diffAgainstBaseline, getNewLinesPerFile } = require('./utils/gitBaseline');
 
 // fallback 全量掃描時用的最小硬編忽略集——只擋技術產物，不再讀 ai-guardian.json::ignoreDirs。
 // 差異掃描走 git diff，本來就尊重 .gitignore，不會掃這些路徑。
@@ -89,6 +89,7 @@ async function runGuard(projectRoot) {
   //    若無任務宣言（沒有執行 start），則退化為全量掃描並給出提示
   const manifestPath = path.join(projectRoot, '.guardian', 'current-task.json');
   let scanTargetSet = null; // null 代表全量掃描
+  let newLinesPerFile = null; // null 代表全行視為新（fallback / 舊格式時不能精準歸屬）
 
   if (fs.existsSync(manifestPath)) {
     try {
@@ -112,6 +113,13 @@ async function runGuard(projectRoot) {
           return { success: true, errors: [] };
         }
         console.log(`🔍 [AI Guardian] 差異掃描模式：本次任務共變更 ${changedFiles.size} 個檔案。`);
+
+        // 拿到「新增的行號集合」用於 magic number / magic string 的 line-level attribution
+        try {
+          newLinesPerFile = getNewLinesPerFile(projectRoot, manifest.baselineCommit);
+        } catch (e) {
+          console.warn(`⚠️  newLines diff 失敗，會把 pre-existing 違規一起報出（保守保護）：${e.message}`);
+        }
       }
     } catch (e) {
       console.log(`⚠️  [AI Guardian] 無法讀取任務宣言或 git diff 失敗（${e.message}），退化為全量掃描。`);
@@ -198,7 +206,17 @@ async function runGuard(projectRoot) {
   for (const filePath of prodFiles) {
     const content = fs.readFileSync(filePath, 'utf-8');
     const relPath = path.relative(projectRoot, filePath);
-    
+    // git diff 用 POSIX 路徑分隔；Windows 上 path.relative 可能回 backslash，做 forward-slash 對齊
+    const relPathPosix = relPath.replace(/\\/g, '/');
+    const fileNewLines = newLinesPerFile ? newLinesPerFile.get(relPathPosix) : null;
+    // 行級別歸屬：只有「本次新引入」的違規才報，避免 pre-existing 連坐
+    // null = fallback（無 baseline 或拿不到 diff）→ 全行視為新（保守，仍會誤報但比放水安全）
+    const isLineNew = (line) => {
+      if (newLinesPerFile === null) return true;
+      if (!fileNewLines) return false;
+      return fileNewLines.has(line);
+    };
+
     try {
       const ast = parser.parse(content, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
       traverse(ast, {
@@ -207,6 +225,7 @@ async function runGuard(projectRoot) {
           if (![0, 1, -1, 100, 0.05].includes(value)) { // 加入稅率測試豁免
             const parent = nodePath.parent;
             if (parent.type !== 'VariableDeclarator' && parent.type !== 'ObjectProperty') {
+              if (!isLineNew(nodePath.node.loc.start.line)) return; // pre-existing → 跳過
               errors.push(`⚠️ [Magic Number 硬編碼] "${relPath}" 第 ${nodePath.node.loc.start.line} 行發現死寫數字: ${value}。`);
             }
           }
@@ -268,6 +287,7 @@ async function runGuard(projectRoot) {
 
           for (const { pattern, label } of MAGIC_STRING_PATTERNS) {
             if (pattern.test(value)) {
+              if (!isLineNew(nodePath.node.loc.start.line)) break; // pre-existing → 跳過（憑證硬編不適用此豁免，已在上方先報過）
               errors.push(`⚠️ [Magic String 硬編碼] "${relPath}" 第 ${nodePath.node.loc.start.line} 行發現 ${label}: "${value}"。請改為引用集中管理的常數或設定檔。`);
               break; // 每個節點只報一次
             }

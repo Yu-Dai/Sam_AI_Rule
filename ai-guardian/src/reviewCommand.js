@@ -16,17 +16,21 @@ const PATCH_IDENTIFIER_PATTERNS = [
   { regex: /^[a-zA-Z]+Mode$/,    label: '模式切換 if' },
 ];
 
-// 補丁註解模式（AST + 非 JS 共用）
+// 補丁註解模式（AST 路徑）
+// 規則：marker 必須在 comment 內容「起始位置」（前面只能有空白）才算 tech-debt 標記，
+// 才不會誤抓 marker 出現在中段做引用 / 字串示例的合理用法。
+// 大小寫敏感（慣例都 ALL CAPS）。
 const PATCH_COMMENT_PATTERNS = [
-  { regex: /\b(TODO|HACK|FIXME|TEMP|XXX)\b/i, label: '危險技術債注釋' },
-  { regex: /@temporary_until/,                label: '強制過期標籤' },
+  { regex: /^\s*\b(TODO|HACK|FIXME|TEMP|XXX)\b/, label: '危險技術債注釋' },
+  { regex: /@temporary_until/,                   label: '強制過期標籤' },
 ];
 
 // 非 JS 路徑用的 fallback regex（會錯抓 string/regex literal，best-effort）
+// 註解 marker 大小寫敏感（同 AST 路徑），避免誤抓正常英文字
 const PATCH_PATTERNS_REGEX = [
   { regex: /if\s*\(\s*is[A-Z][a-zA-Z]+\s*\)/g, label: '補丁型 if 判斷' },
   { regex: /if\s*\(\s*[a-zA-Z]+Mode\s*\)/g,    label: '模式切換 if' },
-  { regex: /\/\/\s*(TODO|HACK|FIXME|TEMP|XXX)/gi, label: '危險技術債注釋' },
+  { regex: /\/\/\s*\b(TODO|HACK|FIXME|TEMP|XXX)\b/g, label: '危險技術債注釋' },
   { regex: /@temporary_until/g,                label: '強制過期標籤' },
 ];
 
