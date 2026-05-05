@@ -1,12 +1,99 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const parser = require('@babel/parser');
+const traverse = require('@babel/traverse').default;
 const { diffAgainstBaseline } = require('./utils/gitBaseline');
 
 // 補丁警告中顯示前 N 個 match 樣本
 const MATCH_PREVIEW_COUNT = 2;
 // JSON.stringify 縮排寬度
 const JSON_INDENT = 2;
+
+// 補丁 if 判斷的識別字模式（AST 路徑用）
+const PATCH_IDENTIFIER_PATTERNS = [
+  { regex: /^is[A-Z][a-zA-Z]+$/, label: '補丁型 if 判斷' },
+  { regex: /^[a-zA-Z]+Mode$/,    label: '模式切換 if' },
+];
+
+// 補丁註解模式（AST + 非 JS 共用）
+const PATCH_COMMENT_PATTERNS = [
+  { regex: /\b(TODO|HACK|FIXME|TEMP|XXX)\b/i, label: '危險技術債注釋' },
+  { regex: /@temporary_until/,                label: '強制過期標籤' },
+];
+
+// 非 JS 路徑用的 fallback regex（會錯抓 string/regex literal，best-effort）
+const PATCH_PATTERNS_REGEX = [
+  { regex: /if\s*\(\s*is[A-Z][a-zA-Z]+\s*\)/g, label: '補丁型 if 判斷' },
+  { regex: /if\s*\(\s*[a-zA-Z]+Mode\s*\)/g,    label: '模式切換 if' },
+  { regex: /\/\/\s*(TODO|HACK|FIXME|TEMP|XXX)/gi, label: '危險技術債注釋' },
+  { regex: /@temporary_until/g,                label: '強制過期標籤' },
+];
+
+const JS_FAMILY_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx']);
+
+/**
+ * 用 AST 掃描 JS/TS 補丁模式。回傳 [{label, sample}] 或 null（parse 失敗）。
+ * 走 AST 而非 regex 避免誤抓字串 / regex literal 內的程式碼樣文字。
+ */
+function scanPatchPatternsAst(content) {
+  let ast;
+  try {
+    ast = parser.parse(content, {
+      sourceType: 'unambiguous',
+      plugins: ['jsx', 'typescript'],
+    });
+  } catch (e) {
+    return null;
+  }
+
+  const findings = [];
+
+  traverse(ast, {
+    IfStatement(nodePath) {
+      const test = nodePath.node.test;
+      if (test.type !== 'Identifier') return;
+      for (const { regex, label } of PATCH_IDENTIFIER_PATTERNS) {
+        if (regex.test(test.name)) {
+          findings.push({ label, sample: `if (${test.name})` });
+          break;
+        }
+      }
+    },
+  });
+
+  for (const comment of ast.comments || []) {
+    for (const { regex, label } of PATCH_COMMENT_PATTERNS) {
+      const match = regex.exec(comment.value);
+      if (match) findings.push({ label, sample: match[0] });
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * 對非 JS 語言用 regex 掃描（best-effort，會誤抓 literal 內容）。
+ */
+function scanPatchPatternsRegex(content) {
+  const findings = [];
+  for (const { regex, label } of PATCH_PATTERNS_REGEX) {
+    const matches = content.match(regex);
+    if (matches) {
+      for (const m of matches) findings.push({ label, sample: m });
+    }
+  }
+  return findings;
+}
+
+function scanPatchPatterns(content, ext) {
+  if (JS_FAMILY_EXTS.has(ext)) {
+    const ast = scanPatchPatternsAst(content);
+    if (ast !== null) return ast;
+    // AST parse 失敗（罕見、非標準語法）→ 退回 regex
+  }
+  return scanPatchPatternsRegex(content);
+}
 
 function runReview(projectRoot, force = false) {
   const guardianDir = path.join(projectRoot, '.guardian');
@@ -163,21 +250,16 @@ function runReview(projectRoot, force = false) {
     let content = '';
     try { content = fs.readFileSync(fullPath, 'utf-8'); } catch (e) { continue; }
 
-    // 偵測補丁模式：if 判斷大量疊加
-    const patchPatterns = [
-      /if\s*\(\s*is[A-Z][a-zA-Z]+\s*\)/g,   // if (isNew) / if (isLegacy)
-      /if\s*\(\s*[a-zA-Z]+Mode\s*\)/g,       // if (newMode)
-      /\/\/\s*(TODO|HACK|FIXME|TEMP|XXX)/gi, // 危險注釋
-      /@temporary_until/g
-    ];
-
-    patchPatterns.forEach((pattern, i) => {
-      const matches = content.match(pattern);
-      if (matches && matches.length > 0) {
-        const labels = ['補丁型 if 判斷', '模式切換 if', '危險技術債注釋', '強制過期標籤'];
-        warnings.push(`⚠️  [疑似補丁] ${relPath} 發現 ${matches.length} 處 ${labels[i]}：${matches.slice(0, MATCH_PREVIEW_COUNT).join(', ')}`);
-      }
-    });
+    // 偵測補丁模式：JS/TS 走 AST 避免誤抓字串/regex literal；其他語言保留 regex（best-effort）
+    const findings = scanPatchPatterns(content, ext);
+    const grouped = {};
+    for (const { label, sample } of findings) {
+      if (!grouped[label]) grouped[label] = [];
+      grouped[label].push(sample);
+    }
+    for (const [label, samples] of Object.entries(grouped)) {
+      warnings.push(`⚠️  [疑似補丁] ${relPath} 發現 ${samples.length} 處 ${label}：${samples.slice(0, MATCH_PREVIEW_COUNT).join(', ')}`);
+    }
 
     // 偵測殭屍命名（新增或修改的檔案帶有殭屍命名）
     const fileName = path.basename(relPath, ext).toLowerCase();
