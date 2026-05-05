@@ -219,6 +219,20 @@ async function runGuard(projectRoot) {
 
     try {
       const ast = parser.parse(content, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
+
+      // 局部豁免：含「guardian-allow-magic」字樣的 comment，將其涵蓋的行（含下一行）標為豁免。
+      // 這讓使用者能對「明確刻意的 magic number / magic string」局部允許，避免被迫統統抽常數。
+      // 注意：硬編憑證偵測「不」過此豁免（永遠報，安全議題優先於可讀性）。
+      const exemptLines = new Set();
+      for (const comment of ast.comments || []) {
+        if (/guardian-allow-magic/.test(comment.value)) {
+          for (let line = comment.loc.start.line; line <= comment.loc.end.line + 1; line++) {
+            exemptLines.add(line);
+          }
+        }
+      }
+      const isExempt = (line) => exemptLines.has(line);
+
       traverse(ast, {
         NumericLiteral(nodePath) {
           const value = nodePath.node.value;
@@ -226,6 +240,7 @@ async function runGuard(projectRoot) {
             const parent = nodePath.parent;
             if (parent.type !== 'VariableDeclarator' && parent.type !== 'ObjectProperty') {
               if (!isLineNew(nodePath.node.loc.start.line)) return; // pre-existing → 跳過
+              if (isExempt(nodePath.node.loc.start.line)) return;   // 顯式 allow-magic → 跳過
               errors.push(`⚠️ [Magic Number 硬編碼] "${relPath}" 第 ${nodePath.node.loc.start.line} 行發現死寫數字: ${value}。`);
             }
           }
@@ -288,6 +303,7 @@ async function runGuard(projectRoot) {
           for (const { pattern, label } of MAGIC_STRING_PATTERNS) {
             if (pattern.test(value)) {
               if (!isLineNew(nodePath.node.loc.start.line)) break; // pre-existing → 跳過（憑證硬編不適用此豁免，已在上方先報過）
+              if (isExempt(nodePath.node.loc.start.line)) break;   // 顯式 allow-magic → 跳過
               errors.push(`⚠️ [Magic String 硬編碼] "${relPath}" 第 ${nodePath.node.loc.start.line} 行發現 ${label}: "${value}"。請改為引用集中管理的常數或設定檔。`);
               break; // 每個節點只報一次
             }
