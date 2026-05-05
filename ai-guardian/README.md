@@ -91,12 +91,11 @@ git commit                  # 用後即焚 + audit log 留底
   "mode": "standard",
   "productionDirs": ["src/production"],
   "labDir": "src/lab",
-  "archiveDir": "src/archive",
-  "ignoreDirs": ["node_modules", ".git", ".guardian", "dist", "build"]
+  "archiveDir": "src/archive"
 }
 ```
 
-`ignoreDirs` 會自動同步 `.gitignore` 內容。
+要讓某個路徑不被 guardian 掃描，加進 `.gitignore` 即可——guardian 的差異偵測走 git diff，會自動尊重。
 
 ---
 

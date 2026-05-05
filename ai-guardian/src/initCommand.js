@@ -2,6 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+// JSON.stringify 縮排寬度
+const JSON_INDENT = 2;
+
 function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
   // 追蹤本次 init 寫入的所有檔案，最後統一 commit（確保 working tree 乾淨）
   const writtenFiles = [];
@@ -22,7 +25,6 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
       productionDirs: ['.'],
       labDir: '.guardian/lab',
       archiveDir: '.guardian/archive',
-      ignoreDirs: ['node_modules', '.git', '.guardian', 'dist', 'build', '.idea', '.vscode']
     };
   } else {
     const dirs = ['src/production', 'src/lab', 'src/archive'];
@@ -38,12 +40,11 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
       productionDirs: ['src/production'],
       labDir: 'src/lab',
       archiveDir: 'src/archive',
-      ignoreDirs: ['node_modules', '.git']
     };
   }
 
   // 儲存配置檔
-  fs.writeFileSync(path.join(targetDir, 'ai-guardian.json'), JSON.stringify(config, null, 2), 'utf-8');
+  fs.writeFileSync(path.join(targetDir, 'ai-guardian.json'), JSON.stringify(config, null, JSON_INDENT), 'utf-8');
   writtenFiles.push('ai-guardian.json');
   console.log('⚙️ 建立設定檔: ai-guardian.json (模式: ' + (isAdopt ? '無痛掛載 Adopt' : '全新標準 Standard') + ')');
 
@@ -158,12 +159,10 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
     '- 開工前主動讀取 README、package.json 或專案根目錄的主要設定檔，確認本次任務的正式邏輯入口。',
     '- 不靠猜測，不憑記憶——有疑問就讀原始碼，不推斷。',
     '',
-    '### 1.5 忽略路徑管理定律（Guardian 掃描的唯一真理來源）',
-    '- **Guardian 的掃描（review / start snapshot / guard AST）讀的是 `ai-guardian.json` 的 `ignoreDirs`，不是 `.gitignore`。**',
-    '- 若你要讓某個目錄或路徑被 guardian 掃描忽略，必須更新 `ai-guardian.json` 的 `ignoreDirs` 陣列。',
-    '- 只改 `.gitignore` 不夠——guardian 會在下次指令執行時自動把 `.gitignore` 的條目同步進來，',
-    '  但若需要立即生效，請直接編輯 `ai-guardian.json`。',
-    '- 格式：純目錄名（如 `"generated"`）或相對路徑前綴（如 `"src/proto-gen"`）皆可。',
+    '### 1.5 忽略路徑管理定律（.gitignore 是唯一真理來源）',
+    '- **Guardian 掃描走 git diff，自動尊重 `.gitignore`，不再讀任何 ai-guardian 自訂忽略清單。**',
+    '- 要讓檔案不被掃描，加進 `.gitignore` 即可，不需動 ai-guardian 設定。',
+    '- 舊版 `ai-guardian.json::ignoreDirs` 欄位已棄用、不再被讀取，可直接刪除。',
     '',
     '### 2. 嚴禁打補丁 (Replace, Don\'t Patch)',
     '- **嚴禁**在既有函式中疊加 `if (isNew)` / `if (isLegacy)` 等兼容判斷。',
