@@ -3,7 +3,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
-const { diffAgainstBaseline } = require('./utils/gitBaseline');
+const { diffAgainstBaseline, getNewLinesPerFile } = require('./utils/gitBaseline');
 
 // 補丁警告中顯示前 N 個 match 樣本
 const MATCH_PREVIEW_COUNT = 2;
@@ -57,9 +57,10 @@ function scanPatchPatternsAst(content) {
     IfStatement(nodePath) {
       const test = nodePath.node.test;
       if (test.type !== 'Identifier') return;
+      const line = nodePath.node.loc && nodePath.node.loc.start.line;
       for (const { regex, label } of PATCH_IDENTIFIER_PATTERNS) {
         if (regex.test(test.name)) {
-          findings.push({ label, sample: `if (${test.name})` });
+          findings.push({ label, sample: `if (${test.name})`, line });
           break;
         }
       }
@@ -67,9 +68,10 @@ function scanPatchPatternsAst(content) {
   });
 
   for (const comment of ast.comments || []) {
+    const line = comment.loc && comment.loc.start.line;
     for (const { regex, label } of PATCH_COMMENT_PATTERNS) {
       const match = regex.exec(comment.value);
-      if (match) findings.push({ label, sample: match[0] });
+      if (match) findings.push({ label, sample: match[0], line });
     }
   }
 
@@ -77,14 +79,29 @@ function scanPatchPatternsAst(content) {
 }
 
 /**
+ * 將字串 offset 換算為 1-based 行號（線性掃描，O(offset)）。
+ */
+function offsetToLine(content, offset) {
+  let line = 1;
+  for (let i = 0; i < offset && i < content.length; i++) {
+    if (content[i] === '\n') line++;
+  }
+  return line;
+}
+
+/**
  * 對非 JS 語言用 regex 掃描（best-effort，會誤抓 literal 內容）。
+ * 用 matchAll 取 offset，再換算成行號，讓 line-level attribution 對非 JS 也生效。
  */
 function scanPatchPatternsRegex(content) {
   const findings = [];
   for (const { regex, label } of PATCH_PATTERNS_REGEX) {
-    const matches = content.match(regex);
-    if (matches) {
-      for (const m of matches) findings.push({ label, sample: m });
+    for (const match of content.matchAll(regex)) {
+      findings.push({
+        label,
+        sample: match[0],
+        line: offsetToLine(content, match.index),
+      });
     }
   }
   return findings;
@@ -159,6 +176,15 @@ function runReview(projectRoot, force = false) {
     console.error(`❌ [diff 失敗] 無法跟 baseline (${manifest.baselineCommit}) 比對：${e.message}`);
     console.error('   baseline commit 可能已被 git gc 回收，或當前不在 git repo。');
     process.exit(1);
+  }
+
+  // 行級別歸屬：拿到每檔案「新增的行號集合」用於 patch scanner 過濾
+  // 失敗時 fallback 為 null（保守全報，與 guardCommand 對齊）
+  let newLinesPerFile = null;
+  try {
+    newLinesPerFile = getNewLinesPerFile(projectRoot, manifest.baselineCommit);
+  } catch (e) {
+    console.warn(`⚠️  newLines diff 失敗，patch scanner 退化為全文掃描：${e.message}`);
   }
 
   const { added, modified, deleted, renamed, typeChanged } = diff;
@@ -255,9 +281,19 @@ function runReview(projectRoot, force = false) {
     try { content = fs.readFileSync(fullPath, 'utf-8'); } catch (e) { continue; }
 
     // 偵測補丁模式：JS/TS 走 AST 避免誤抓字串/regex literal；其他語言保留 regex（best-effort）
+    // line-level attribution：只報新引入行上的 patch 模式，pre-existing 不報
     const findings = scanPatchPatterns(content, ext);
+    const relPathPosix = relPath.replace(/\\/g, '/');
+    const fileNewLines = newLinesPerFile ? newLinesPerFile.get(relPathPosix) : null;
+    const isLineNew = (line) => {
+      if (newLinesPerFile === null) return true; // fallback：保守全報
+      if (!fileNewLines) return false;           // 檔案未變更（理論上不會到這）
+      return line === undefined ? true : fileNewLines.has(line);
+    };
+
     const grouped = {};
-    for (const { label, sample } of findings) {
+    for (const { label, sample, line } of findings) {
+      if (!isLineNew(line)) continue;
       if (!grouped[label]) grouped[label] = [];
       grouped[label].push(sample);
     }
