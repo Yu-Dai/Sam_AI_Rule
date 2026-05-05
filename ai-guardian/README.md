@@ -31,6 +31,17 @@ npm install
 npm link  # 註冊為全域指令（Windows 可能需要管理員 PowerShell）
 ```
 
+### 開發 ai-guardian 自己時：日常同步本機改動到全域
+
+`npm install -g .` 在 Windows 容易踩 EBUSY；想快速同步時用：
+
+```bash
+cd ~/Sam_AI_Rule/ai-guardian
+ai-guardian self-update    # 直接 cp src + bin 到全域，跳過 npm 工具鏈
+```
+
+只能在 ai-guardian source repo 內跑（會檢查 `package.json::name`）。
+
 ---
 
 ## 使用流程
@@ -51,7 +62,8 @@ ai-guardian adopt   # 既有專案：無痛掛載，建立 .guardian 沙盒
 ### 每個任務：完整 workflow
 
 ```bash
-ai-guardian start "<任務描述>"   # ① 開工宣誓，建立 branch + 檔案快照
+ai-guardian start "<任務描述>"   # ① 開工宣誓，建立 branch + git baseline commit
+# ② 讀 .guardian/current-task.md，輸出 Pre-flight Checkout 開工分析報告
 # ... 開發 ...
 ai-guardian review               # ③ 完工審查，產出改動報告
 git commit                       # ④ pre-commit hook 自動跑 AST 掃描
@@ -59,6 +71,17 @@ ai-guardian finish               # ⑤ 合併主線、清理現場
 ```
 
 跳過 `start` / `review` 會被擋。
+
+### 想反悔？
+
+```bash
+ai-guardian abort [--yes]   # 丟棄當前任務、刪除分支、回主線
+```
+
+安全機制：
+- 任務分支若有 commit 超出主線 → 拒絕並列出 commits（避免永久丟失）
+- 未 commit 改動透過 stash → checkout main → pop 還原（保留你的工作）
+- 非互動環境必須加 `--yes`（避免 CI / AI 誤觸）
 
 ### 緊急：Hotfix 模式
 
@@ -70,15 +93,64 @@ git commit                  # 用後即焚 + audit log 留底
 
 ---
 
+## 改動偵測機制
+
+`start` 時用 git plumbing 凍結當下工作區為 baseline commit（**不污染主 `.git/index`**）；
+`review` / `guard` / `finish` 都對這個 baseline 跑 git diff。所以：
+
+- **不限副檔名**：改 `.gd` / `.rs` / `.json` / `.yaml` / `.sh` / `Dockerfile` 都會被偵測
+  （早期版本只認 `.js .ts` 等 13 種白名單，現已棄用）
+- **自動尊重 `.gitignore`**：要忽略某路徑，加進 `.gitignore` 即可
+- **支援 rename / 新檔 / 刪除 / type 變更**
+
+---
+
+## 行級別歸屬（Line-level Attribution）
+
+guard 的 AST 違規偵測（Magic Number / Magic String / patch 模式）按
+「**新引入的行**」報告，**pre-existing 違規不會被連坐**。
+
+```javascript
+// 第 1-3 行（pre-existing）
+function existing(isHotfix) {
+  if (isHotfix) return 1;     // 第 3 行：不報
+}
+// 第 4-6 行（本任務新增）
+function added(isNewFlag) {
+  if (isNewFlag) return 2;    // 第 6 行：報「補丁型 if 判斷」
+}
+```
+
+例外（**永遠報，不過行級別 filter**）：
+- 硬編憑證偵測（安全議題優先於可讀性）
+- 函式雷同偵測（cross-file 議題與行號無關）
+
+---
+
 ## 檢查項目
 
-| 檢查 | 說明 |
-|------|------|
-| **邏輯雷同偵測** | AST 去骨 + MD5 — 抓「換湯不換藥」的 copy-paste，變數改名也擋不住 |
-| **Magic Number** | 程式裡死寫的數字（豁免 `0` `1` `-1` `100`） |
-| **Magic String** | 硬編角色（`admin` / `root` / ...）、API 路徑、環境字串、版本號 |
-| **新舊兼容字串** | `legacy_` / `new_` / `old_` / `v1_` 等 — 通常代表舊邏輯沒徹底刪除 |
-| **硬編憑證** | 語境感知：`if (pw === "xxx")` 才報，誤報率低 |
+| 檢查 | 偵測方式 | 範圍 |
+|------|---------|------|
+| **邏輯雷同（換湯不換藥）** | AST 去骨指紋 + MD5 比對 | JS/JSX/TS/TSX |
+| **補丁型 if 判斷** | AST `IfStatement.test` 是 `is[A-Z]...` 或 `xxxMode` 識別字 | JS/JSX/TS/TSX |
+| **危險注釋** | 行起始的 `TODO/HACK/FIXME/TEMP/XXX` 標記（大小寫敏感） | 所有副檔名 |
+| **Magic Number** | AST `NumericLiteral` 字面值 | JS/JSX/TS/TSX |
+| **Magic String** | 角色 / API 路徑 / 環境字串 / 版本號 / 新舊 flag | JS/JSX/TS/TSX |
+| **硬編憑證** | 語境感知：`if (pw === "xxx")` 才報，誤報率極低 | JS/JSX/TS/TSX |
+
+### Magic Number 三層豁免
+
+1. **內建白名單值**：`0` / `1` / `-1` / `100` / `0.05`（稅率測試）
+2. **位置豁免**：父節點是 `VariableDeclarator` / `ObjectProperty`（即明確的常數定義）
+3. **註解豁免**：`// guardian-allow-magic` 局部 override
+
+```javascript
+const args = process.argv[42]; // guardian-allow-magic: argv index
+return arr.slice(0, 5);        // 報 magic number 5
+
+// guardian-allow-magic: next-line case
+const x = arr[99];             // 不報（前一行有豁免標記）
+```
 
 ---
 
@@ -110,8 +182,10 @@ ai-guardian uninstall --full  # 完整移除 .guardian/、ai-guardian.json
 
 ## 限制
 
-- 目前只支援 JavaScript / TypeScript（`.js` `.jsx` `.ts` `.tsx`）
-- 邏輯雷同偵測有最小函數長度門檻（< 3 行函數不檢查）
+- **AST 邏輯掃描**只支援 JavaScript / TypeScript（`.js` `.jsx` `.ts` `.tsx`）
+- **改動偵測**（start / review / finish 內部走 git diff）支援所有副檔名
+- 邏輯雷同偵測有最小函式長度門檻（< 3 行函式不檢查）
+- 補丁注釋偵測非 JS 副檔名走 regex（best-effort，會誤抓字串 / regex literal 內的標記文字）
 - `debate` 對峙法庭機制尚未完整（只實作 `debate reset`）
 
 ---
