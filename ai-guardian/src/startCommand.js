@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { execSync } = require('child_process');
 const { createBaseline } = require('./utils/gitBaseline');
 const { checkRemoteSync, STATUS: SYNC_STATUS } = require('./utils/syncCheck');
@@ -12,6 +13,10 @@ const MAX_SLUG_LENGTH = 40;
 const ISO_DATE_LENGTH = 10;
 // JSON.stringify 縮排寬度
 const JSON_INDENT = 2;
+// branch slug 含非 ASCII 時用的 hash 後綴長度（hex chars）
+const SLUG_HASH_LENGTH = 8;
+// slug 含非 ASCII 時保留給 ASCII 部分的預算（總長 - hash - 1 個分隔符）
+const SLUG_ASCII_BUDGET = MAX_SLUG_LENGTH - SLUG_HASH_LENGTH - 1;
 
 async function runStart(projectRoot, taskDescription, options = {}) {
   const { forceStale = false } = options;
@@ -194,11 +199,9 @@ async function runStart(projectRoot, taskDescription, options = {}) {
   }
 
   // 3. 強制建立並切換到 guardian/ branch
-  const slug = taskDescription
-    .toLowerCase()
-    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, MAX_SLUG_LENGTH);
+  //    slug 規則：純 ASCII 描述 → 直接用；含非 ASCII → ASCII 部分 + hash 後綴
+  //    避免中文 / 其他非 ASCII 字符在 GitHub UI / CI / 第三方 git 工具被 URL-encode 成亂碼
+  const slug = makeBranchSlug(taskDescription);
   const date = new Date().toISOString().slice(0, ISO_DATE_LENGTH).replace(/-/g, '');
   const branchName = `guardian/${slug}-${date}`;
 
@@ -286,6 +289,36 @@ ai-guardian finish    # 任務完結，自動合併主線並清理現場
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('');
   console.log(`🚀 任務已就緒：「${taskDescription}」`);
+}
+
+/**
+ * 從任務描述產生 ASCII 安全的 branch slug。
+ *
+ * 三種情境：
+ *   純 ASCII → 直接 lower-case + 連字號化（保可讀，例：refactor-snapshot）
+ *   含非 ASCII → ASCII 部分（若有）+ hash 後綴（例：snapshot-a1b2c3d4）
+ *   全非 ASCII → t-{hash}（例：t-a1b2c3d4）
+ *
+ * Hash 用 sha1 取前 SLUG_HASH_LENGTH 個 hex chars 保唯一性。
+ */
+function makeBranchSlug(taskDescription) {
+  const hasNonAscii = /[^\x00-\x7f]/.test(taskDescription);
+  const asciiNormalized = taskDescription
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (!hasNonAscii) {
+    return asciiNormalized.slice(0, MAX_SLUG_LENGTH) || 't';
+  }
+
+  const hashPart = crypto
+    .createHash('sha1')
+    .update(taskDescription)
+    .digest('hex')
+    .slice(0, SLUG_HASH_LENGTH);
+  const asciiPart = asciiNormalized.slice(0, SLUG_ASCII_BUDGET);
+  return asciiPart ? `${asciiPart}-${hashPart}` : `t-${hashPart}`;
 }
 
 module.exports = { runStart };
