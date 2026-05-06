@@ -69,16 +69,46 @@ if [ "$LINK_EXIT" -eq 0 ]; then
   echo "  cd .."
   echo "  bash Sam_AI_Rule/init-project.sh"
 else
-  echo "[warn] npm link 失敗（exit code: $LINK_EXIT）。常見原因：權限不足。"
-  echo "依賴已安裝完成，但全域指令未註冊。請從以下擇一："
+  # 偵測平台，給出對應的修復建議（Windows 跟 Unix 失敗原因常常完全不同）
+  case "$(uname)" in
+    *CYGWIN*|*MINGW*|*MSYS*) PLATFORM="windows" ;;
+    Darwin) PLATFORM="mac" ;;
+    *) PLATFORM="linux" ;;
+  esac
+
+  echo "[warn] npm link 失敗（exit code: $LINK_EXIT）。"
+  echo "依賴已安裝完成，但全域指令未註冊。"
   echo
-  echo "選項 A：以 sudo 重新註冊"
-  echo "  cd ai-guardian && sudo npm link"
-  echo
-  echo "選項 B：手動加 alias 到 shell profile（不需要 sudo）"
-  echo "  在 ~/.bashrc 或 ~/.zshrc 加入下面這行："
-  echo "  alias ai-guardian='node $(pwd)/bin/cli.js'"
-  echo
-  echo "選項 C：每次用完整路徑呼叫"
-  echo "  node $(pwd)/bin/cli.js <command>"
+
+  if [ "$PLATFORM" = "windows" ]; then
+    echo "Windows 上最常見原因是 EBUSY（檔案被鎖住）— 而非權限問題："
+    echo "  - 其他 terminal / IDE 正在跑 ai-guardian"
+    echo "  - Windows Defender / 防毒在掃 npm 全域目錄"
+    echo "  - 之前的 ai-guardian 指令還有 node.exe 殘留 handle 沒釋放"
+    echo
+    echo "選項 A（推薦）：手動清除舊 link 後重試"
+    echo "  1. 關掉所有跑過 ai-guardian 的 terminal / IDE 視窗"
+    echo "  2. （PowerShell）taskkill /F /IM node.exe   # 殺掉殘留 node"
+    echo "  3. npm uninstall -g ai-guardian"
+    echo "  4. cd ai-guardian && npm link"
+    echo
+    echo "選項 B：跳過 npm link，用 PowerShell 函式（不碰全域）"
+    echo "  在你的 \$PROFILE 加入這一行："
+    echo "  function ai-guardian { node \"$(pwd)/bin/cli.js\" @args }"
+    echo
+    echo "選項 C：每次用完整路徑呼叫"
+    echo "  node $(pwd)/bin/cli.js <command>"
+  else
+    echo "Unix 上最常見原因是權限不足（無法寫入 npm 全域目錄）："
+    echo
+    echo "選項 A：以 sudo 重新註冊"
+    echo "  cd ai-guardian && sudo npm link"
+    echo
+    echo "選項 B：手動加 alias 到 shell profile（不需要 sudo）"
+    echo "  在 ~/.bashrc 或 ~/.zshrc 加入下面這行："
+    echo "  alias ai-guardian='node $(pwd)/bin/cli.js'"
+    echo
+    echo "選項 C：每次用完整路徑呼叫"
+    echo "  node $(pwd)/bin/cli.js <command>"
+  fi
 fi

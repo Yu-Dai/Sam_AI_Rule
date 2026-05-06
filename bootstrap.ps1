@@ -68,18 +68,28 @@ try {
         Write-Host "  cd .." -ForegroundColor Gray
         Write-Host "  & .\Sam_AI_Rule\init-project.ps1" -ForegroundColor Gray
     } else {
-        Write-Host "[warn] npm link 失敗（exit code: $linkExitCode）。常見原因：權限不足。" -ForegroundColor Yellow
-        Write-Host "依賴已安裝完成，但全域指令未註冊。請從以下擇一：" -ForegroundColor Yellow
+        Write-Host "[warn] npm link 失敗（exit code: $linkExitCode）。" -ForegroundColor Yellow
+        Write-Host "依賴已安裝完成，但全域指令未註冊。" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "選項 A：以管理員 PowerShell 重新執行" -ForegroundColor Cyan
-        Write-Host "  cd $(Split-Path -Parent $aiGuardianBin)\.." -ForegroundColor Gray
-        Write-Host "  .\bootstrap.ps1" -ForegroundColor Gray
+        Write-Host "Windows 上最常見原因是 EBUSY（檔案被鎖住）— 而非權限問題：" -ForegroundColor Yellow
+        Write-Host "  - 其他 terminal / IDE 正在跑 ai-guardian" -ForegroundColor Gray
+        Write-Host "  - Windows Defender / 防毒在掃 npm 全域目錄" -ForegroundColor Gray
+        Write-Host "  - 之前的 ai-guardian 指令還有 node.exe 殘留 handle 沒釋放" -ForegroundColor Gray
         Write-Host ""
-        Write-Host "選項 B：手動加入 PowerShell function 到 `$PROFILE（不需要管理員）" -ForegroundColor Cyan
+        Write-Host "選項 A（推薦）：手動清除舊 link 後重試" -ForegroundColor Cyan
+        Write-Host "  1. 關掉所有跑過 ai-guardian 的 terminal / IDE 視窗" -ForegroundColor Gray
+        Write-Host "  2. taskkill /F /IM node.exe   # 殺掉殘留 node" -ForegroundColor Gray
+        Write-Host "  3. npm uninstall -g ai-guardian" -ForegroundColor Gray
+        Write-Host "  4. cd $(Split-Path -Parent $aiGuardianBin)\..; .\bootstrap.ps1" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "選項 B：跳過 npm link，用 PowerShell 函式（不碰全域）" -ForegroundColor Cyan
+        Write-Host "  在你的 `$PROFILE 加入這一行：" -ForegroundColor Gray
         Write-Host "  function ai-guardian { node `"$aiGuardianBin`" @args }" -ForegroundColor Gray
         Write-Host ""
         Write-Host "選項 C：每次用完整路徑呼叫" -ForegroundColor Cyan
         Write-Host "  node `"$aiGuardianBin`" <command>" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "（若上述都失敗，且確認真的是權限問題：以管理員 PowerShell 重跑 .\bootstrap.ps1）" -ForegroundColor DarkGray
     }
 }
 catch {
