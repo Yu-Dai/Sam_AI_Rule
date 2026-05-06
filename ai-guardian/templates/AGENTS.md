@@ -1,6 +1,10 @@
-# CLAUDE.md — Sam_AI_Rule Personal Rules
+# AGENTS.md — AI Guardian Project Rules
 
-Claude Code 全域行為規則，每個 session 跨所有專案載入。
+> 本檔由 `ai-guardian` 從 `ai-guardian/templates/AGENTS.md` 自動產生。
+> 編輯入口：改 template 後重跑 `ai-guardian init` 即覆寫本檔。
+> per-project 客製：刪除本檔第一行的 `— AI Guardian Project Rules` 後綴後，init 會視為使用者客製版本不再覆寫。
+
+Sam_AI_Rule 個人與專案規則的單一真理來源。所有 AI coding tool（Claude Code、Cursor、Antigravity、Roo、Windsurf 等）都讀本檔。
 
 **取捨：** 這份規則偏向謹慎、透明、外科式改動，速度其次。瑣碎任務自行斟酌。
 
@@ -208,10 +212,60 @@ bug 或錯誤出現時，**預設從源頭修，不從症狀修**。
 - 若我的要求跟 PROJECT.md 的「非目標 / 放棄方向」衝突 → **明確提出**讓我重新確認是否有意識的改變
 
 ### 16. ai-guardian 整合（若專案已掛載）
-若專案根目錄存在 `.guardian/` 或 `ai-guardian.json`，代表此專案已掛載 ai-guardian 程式碼守衛 CLI。
+若專案根目錄存在 `.guardian/` 或 `ai-guardian.json`，本檔下方「## AI Guardian 工具附錄」即是工具操作規格 — **完整流程、強制聲明、禁止繞過清單** 一律以該段為準。
 
-- **完整流程、強制聲明、禁止繞過清單** 一律以該專案的 `AGENTS.md` 為唯一真理來源 — 別在這份 CLAUDE.md 找細節，避免 drift。
-- 簡記：`start → 工作 → review → commit → finish`；緊急情況 `start hotfix`；hook 擋下 commit 時先讀訊息找根因（§14），禁止 `--no-verify` 繞過。
+簡記：`start → 工作 → review → commit → finish`；緊急情況 `start hotfix`；hook 擋下 commit 時先讀訊息找根因（§14），禁止 `--no-verify` 繞過。
+
+### 17. 完整路徑（No HappyPath）
+**主動考慮 null / 競態 / 權限不足 / 超時等邊界情境，不要只實作順利情況。**
+
+實作前列出可能的失敗模式：
+- null / undefined / 空陣列 / 空字串輸入
+- 競態條件（同一資源多 worker 並行存取、async 順序顛倒）
+- 權限不足（檔案、API token、使用者角色）
+- 網路或外部服務 5xx / 超時 / 斷線重連
+- 資源耗盡（檔案系統滿、記憶體上限、rate limit）
+
+**禁止**：只跑 happy path 就視為完成。每個失敗模式至少要回答「這時系統會怎樣」，再決定是「明確處理」還是「明確選擇不處理（並說明為何安全）」。
+
+### 18. 誠實簽名（Honest Contracts）
+**函式簽名與實際回傳行為必須一致，不製造型別謊言。**
+
+- 宣告回傳 `User` 卻有路徑回傳 `null` → 改型別為 `User | null`，或在簽名上補 `Optional / Maybe`
+- 宣告同步函式卻內部用 setTimeout / Promise / await → 改成 async
+- 宣告吃 `Array<string>` 卻實際接受 `null` 也不爆 → 改簽名為 `Array<string> | null` 或在入口擋 null
+- 宣告 throws X 卻其實也會 throw Y → 補上去或包成 X
+
+呼叫端只能依賴你的簽名做防禦。簽名說謊 = 呼叫端的 try/catch 無法寫對。
+
+### 19. 邊界封裝（No Global Pollution）
+**不將任務狀態偷掛到全域 / singleton / 模組頂層。**
+
+- 暫存資料應放在函式 scope 或明確傳遞的 context 物件
+- 全域可變狀態會讓測試難寫、並行不安全、debug 困難（誰改了它？什麼時候？）
+- 「順手放 module 頂層」是常見偷懶 — 永遠是技術債
+
+**例外**：真正的應用層 config、logger、connection pool 可以是 singleton，但要明確命名、明確生命週期、明確初始化點，不要用 lazy module-level side effect。
+
+### 20. 設定顯名（No Magic Constants）
+**不在邏輯中硬編數字或字串，引用集中設定檔或具名常數。**
+
+- `setTimeout(fn, 5000)` → `const REQUEST_TIMEOUT_MS = 5000`
+- `if (status === 'pending')` → `const STATUS_PENDING = 'pending'` 或 enum
+- API URL、credential、path → 環境變數或 config
+- 重試次數、batch size、頁數上限 → 常數
+
+**例外**：迴圈索引（`i`, `j`）、零值、明顯的數學常數（`Math.PI`）、單元測試裡的 fixture 數值不必命名。
+
+判準：「這個值改變時，會不會有第二處要一起改？」會 → 必須具名。
+
+### 21. 原則優於範例（Principles over Examples）
+**修改任何規則 / 協議 / 文件時，只寫入普遍原則。**
+
+User 在對話中提供的具體 debug 案例（特定函式名、變數名、錯誤訊息）是**說明樣本**，不是普遍法則。
+不得將樣本直接複製進系統規則，否則等同把單一 bug 的特徵當成所有 bug 的定義。
+
+寫完規則自問：「離開這次對話的具體脈絡，這條規則還站得住腳嗎？讀者沒看過這次討論能照做嗎？」
 
 ---
 
@@ -230,7 +284,117 @@ bug 或錯誤出現時，**預設從源頭修，不從症狀修**。
 
 ---
 
-> 本檔由 `ai-guardian` 從 `ai-guardian/templates/CLAUDE.md` 自動產生。
-> 編輯入口：改 template 後重跑 `ai-guardian init/adopt` 即覆寫本檔。
-> 若你想做 per-project 客製，請刪除本檔第一行的 `— Sam_AI_Rule Personal Rules` 後綴；
-> 移除 marker 後 init 會視為「使用者客製版本」，不再覆寫。
+## AI Guardian 工具附錄（Tool Spec）
+
+> 以下為 ai-guardian CLI 的操作規格。若專案未掛載 ai-guardian（無 `.guardian/` 或 `ai-guardian.json`），本附錄整段可跳過。
+
+### 開工前流程判定 — 先問這一個問題
+
+**「這個任務結束後，應用程式的執行行為會改變嗎？」**
+
+**不需要 guardian 流程**（直接執行，不需 start）：
+- 純回答問題、解釋程式碼、討論方案（不修改任何檔案）
+- 只修改文件檔案：`.md` / `.txt` / `.rst` / `.mdx`
+- 只修改 AI rules 設定：`.agents/rules/`、`.cursor/rules/`、`.claude/rules/`、`.roo/rules/` 等
+
+**使用 Hotfix 流程**（同時符合以下**全部**條件）：
+- User 明確說了「緊急」「hotfix」「先這樣修」「快速修一下」
+- 修改範圍集中（1–3 個檔案），且根因已明確，不需要探索
+- 是修正既有邏輯錯誤，不是新增功能
+
+→ 用 `ai-guardian start "hotfix: ..."`
+
+**使用完整 guardian 流程**（其餘所有情況）：
+- 修改任何程式碼檔案（`.ts` `.js` `.py` `.go` `.java` `.vue` `.dart` 等）
+- 修改影響執行行為的設定（`package.json` 的 dependencies/scripts、`tsconfig.json`、`webpack.config.*`、CI/CD、Dockerfile 等）
+- 新增或刪除任何功能模組
+
+---
+
+### 開工：ai-guardian start（接受任何任務的絕對第一步）
+
+**在你說任何話、動任何檔案、執行任何指令之前，第一個 tool call 必須是：**
+
+```bash
+ai-guardian start "<用戶的需求描述>"
+```
+
+**為什麼是強制的？**
+- 自動建立隔離的 Git Branch，鎖定本次任務的檔案範圍
+- 若跳過此步驟直接修改檔案，系統狀態不會進入就緒（reviewPassed=false）
+- Git pre-commit hook 將在 commit 時**永久攔截**
+
+**正確的開工聲明格式**（在你回覆 user 之前必須輸出）：
+
+```
+[AI Guardian 合規聲明]
+- 任務描述：<一句話精確描述任務，不可模糊>
+- 已執行：ai-guardian start "<任務描述>"
+- 建立分支：guardian/<slug>-<date>
+- 任務範圍：<列出本次所有預計修改的檔案，禁止寫「視情況」>
+- 資料流入口：<邏輯起點的函式/模組/事件名稱>
+
+確認已熟讀並承諾遵守上方所有行為原則（§1–§21）與硬性規則。
+```
+
+---
+
+### Commit 前：ai-guardian review
+
+**完成所有修改後，在 git commit 之前必須執行：**
+
+```bash
+ai-guardian review
+```
+
+- 工具會比對改動清單、掃描補丁模式、檢查殭屍命名
+- 報告通過後才可 `git commit`
+- 跳過此步驟直接 commit，pre-commit hook 將自動封鎖
+
+---
+
+### 任務結束：ai-guardian finish（撤收儀式）
+
+**通過 review 並 commit 且 user 確認滿意後，必須執行：**
+
+```bash
+ai-guardian finish
+```
+
+**為何不可手動 git merge？**
+- **歸檔**：自動將任務紀錄移入 `archive/`。手動 merge 會留一堆雜亂文檔在根目錄
+- **撤收**：自動切回主線並刪除任務分支
+- **稽核鏈**：私下 `git merge` 會破壞免疫系統的稽核鏈
+
+---
+
+### Tool-Specific 規範
+
+#### G1. 入口定位定律
+- 開工前主動讀取 README、package.json 或專案根目錄的主要設定檔，確認本次任務的正式邏輯入口
+- 不靠猜測，不憑記憶 — 有疑問就讀原始碼，不推斷
+
+#### G2. 忽略路徑管理（.gitignore 是 SSoT）
+- Guardian 掃描走 git diff，自動尊重 `.gitignore`，**不再讀任何 ai-guardian 自訂忽略清單**
+- 要讓檔案不被掃描，加進 `.gitignore` 即可，不需動 ai-guardian 設定
+- 舊版 `ai-guardian.json::ignoreDirs` 欄位已棄用、不再被讀取，可直接刪除
+
+#### G3. 嚴禁逆向依賴
+- {{PRODUCTION_LABEL}}，絕對不可依賴 {{LAB_LABEL}} 裡的測試或封存邏輯。
+
+#### G4. 沙盒試車場（lab/）使用規範
+- **定位**：{{LAB_LABEL}} 是「純邏輯試車場」與「外部 API 驅動台」
+- **強制啟動時機**（任一觸發即必須使用 lab/）：
+  1. **外部交涉**：串接全新第三方 API 或未曾使用的 Library
+  2. **心臟手術**：重構「計算、權限、金流」等核心業務資料流
+  3. **時序與非同步**：處理複雜的 Promise 批次任務或多線程
+- **正確操作**：實際邏輯寫在正式區（`_Next` 平行實作）。lab/ 裡建立測試腳本 `import` 正式區模組，並掛載「主線真實 Payload」進去測試
+- **錯誤操作**：在 lab/ 手刻核心邏輯並用假資料造假測試
+- **UI 視圖層豁免**：修改 UI 視圖組件或全域狀態管理時**嚴禁**抽離至 lab/ 隔離測試。UI 層應依賴專案的 Hot Reload 由 user 肉眼驗證
+
+#### G5. 對峙法庭（adversarial-debate skill）
+觸發條件依本檔 §7 Pre-Mortem 判定。觸發後執行 `ai-guardian debate start`，由 CLI 引導紅隊 CTO 與藍隊架構師對峙。詳細操作見 SKILL.md。
+
+---
+
+> 你的最高使命：維持主線乾淨，每次改動都是一次外科手術而非補丁堆疊。

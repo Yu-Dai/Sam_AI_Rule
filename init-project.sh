@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
-# init-project.sh — 在 Sam_AI_Rule clone 子目錄內執行，把規則檔複製到 parent (專案根目錄)
+# init-project.sh — 在 Sam_AI_Rule clone 子目錄內執行，把專案級設定檔複製到 parent (專案根目錄)
 #
 # 用法：
 #   cd <project>/Sam_AI_Rule
 #   bash init-project.sh
 #
 # 行為（操作目標都是 parent，即專案根目錄）：
-#   1. 從 ai-guardian/templates/CLAUDE.md 複製 CLAUDE.md 到 parent（若已存在則跳過）
-#      若使用者選擇步驟 4 的 ai-guardian adopt，CLAUDE.md 也會由 adopt 帶 marker 重新產生
-#   2. (詢問) 複製 PROJECT.md 模板到 parent
-#   3. (詢問) 把 Sam_AI_Rule/ 加到 parent 的 .gitignore
+#   1. (詢問) 複製 PROJECT.md 模板到 parent（給人填寫的方向追蹤檔）
+#   2. (詢問) 把 Sam_AI_Rule/ 加到 parent 的 .gitignore
 #      （避免 ai-guardian adopt 把 Sam_AI_Rule 內的程式碼納入掃描）
-#   4. (詢問) cd 到 parent 後執行 ai-guardian adopt 掛載守衛（會同步生成 AGENTS.md + CLAUDE.md）
+#   3. (詢問) cd 到 parent 後執行 ai-guardian adopt 掛載守衛
+#      adopt 會同步產生 AGENTS.md（規則本體）+ CLAUDE.md stub（引導到 AGENTS.md）
 
 set -e
 
@@ -43,15 +42,7 @@ echo "Sam_AI_Rule 路徑：$SAM_AI_DIR"
 echo "專案根目錄：$TARGET"
 echo
 
-# 1. CLAUDE.md（template 在 ai-guardian/templates/，不在根目錄）
-if [ -f "$TARGET/CLAUDE.md" ]; then
-  echo "[skip] $TARGET/CLAUDE.md 已存在"
-else
-  cp ai-guardian/templates/CLAUDE.md "$TARGET/CLAUDE.md"
-  echo "[ok] CLAUDE.md → $TARGET/"
-fi
-
-# 2. PROJECT.md (詢問)
+# 1. PROJECT.md (詢問)
 read -r -p '是否建立 PROJECT.md（長期專案方向追蹤）？(y/N) ' ans
 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
   if [ -f "$TARGET/PROJECT.md" ]; then
@@ -62,7 +53,7 @@ if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
   fi
 fi
 
-# 3. 把 Sam_AI_Rule 加到 parent 的 .gitignore（避免被 ai-guardian / git 納入）
+# 2. 把 Sam_AI_Rule 加到 parent 的 .gitignore（避免被 ai-guardian / git 納入）
 if [ -f "$TARGET/.gitignore" ] && grep -qE "^/?${SAM_AI_NAME}/?\$" "$TARGET/.gitignore"; then
   echo "[skip] $TARGET/.gitignore 已含 $SAM_AI_NAME/"
 else
@@ -75,7 +66,7 @@ else
   fi
 fi
 
-# 4. ai-guardian (詢問)
+# 3. ai-guardian (詢問)
 read -r -p '是否在專案根目錄掛載 ai-guardian？(y/N) ' ans
 if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
   if ! command -v ai-guardian >/dev/null 2>&1; then

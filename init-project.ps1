@@ -5,12 +5,11 @@
 #   .\init-project.ps1
 #
 # 行為（操作目標都是 parent，即專案根目錄）：
-#   1. 從 ai-guardian\templates\CLAUDE.md 複製 CLAUDE.md 到 parent（若已存在則跳過）
-#      若使用者選擇步驟 4 的 ai-guardian adopt，CLAUDE.md 也會由 adopt 帶 marker 重新產生
-#   2. (詢問) 複製 PROJECT.md 模板到 parent
-#   3. (詢問) 把 Sam_AI_Rule/ 加到 parent 的 .gitignore
+#   1. (詢問) 複製 PROJECT.md 模板到 parent（給人填寫的方向追蹤檔）
+#   2. (詢問) 把 Sam_AI_Rule/ 加到 parent 的 .gitignore
 #      （避免 ai-guardian adopt 把 Sam_AI_Rule 內的程式碼納入掃描）
-#   4. (詢問) cd 到 parent 後執行 ai-guardian adopt 掛載守衛（會同步生成 AGENTS.md + CLAUDE.md）
+#   3. (詢問) cd 到 parent 後執行 ai-guardian adopt 掛載守衛
+#      adopt 會同步產生 AGENTS.md（規則本體）+ CLAUDE.md stub（引導到 AGENTS.md）
 
 $ErrorActionPreference = 'Stop'
 
@@ -41,15 +40,7 @@ try {
     Write-Host "專案根目錄：$target" -ForegroundColor Gray
     Write-Host ""
 
-    # 1. CLAUDE.md（template 在 ai-guardian\templates\，不在根目錄）
-    if (Test-Path (Join-Path $target 'CLAUDE.md')) {
-        Write-Host "[skip] $target\CLAUDE.md 已存在" -ForegroundColor Yellow
-    } else {
-        Copy-Item 'ai-guardian\templates\CLAUDE.md' (Join-Path $target 'CLAUDE.md')
-        Write-Host "[ok] CLAUDE.md → $target\" -ForegroundColor Green
-    }
-
-    # 2. PROJECT.md (詢問)
+    # 1. PROJECT.md (詢問)
     $ans = Read-Host '是否建立 PROJECT.md（長期專案方向追蹤）？(y/N)'
     if ($ans -eq 'y' -or $ans -eq 'Y') {
         if (Test-Path (Join-Path $target 'PROJECT.md')) {
@@ -60,7 +51,7 @@ try {
         }
     }
 
-    # 3. 把 Sam_AI_Rule 加到 parent 的 .gitignore
+    # 2. 把 Sam_AI_Rule 加到 parent 的 .gitignore
     $gitignorePath = Join-Path $target '.gitignore'
     $alreadyIgnored = $false
     if (Test-Path $gitignorePath) {
@@ -80,7 +71,7 @@ try {
         }
     }
 
-    # 4. ai-guardian (詢問)
+    # 3. ai-guardian (詢問)
     $ans = Read-Host '是否在專案根目錄掛載 ai-guardian？(y/N)'
     if ($ans -eq 'y' -or $ans -eq 'Y') {
         if (-not (Get-Command ai-guardian -ErrorAction SilentlyContinue)) {

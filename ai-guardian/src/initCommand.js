@@ -6,7 +6,7 @@ const { execSync } = require('child_process');
 const JSON_INDENT = 2;
 
 // 規則本體與 SKILL 的 single source of truth
-// 任何規則文字的修改，請改 templates/AI_GUARDIAN_PROTOCOL.md，不要回頭塞 JS 字串
+// 任何規則文字的修改，請改 templates/AGENTS.md，不要回頭塞 JS 字串
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
 
 function loadTemplate(filename) {
@@ -21,7 +21,7 @@ function renderTemplate(content, vars) {
 }
 
 // IDE 配接器：每個 IDE 只描述「我的 rule 檔放哪、用什麼 frontmatter、要不要 skill」
-// 不再夾帶規則本體 — 規則只活在 templates/AI_GUARDIAN_PROTOCOL.md 與 AGENTS.md
+// 不再夾帶規則本體 — 規則只活在 templates/AGENTS.md（即部署到根目錄的 AGENTS.md SSoT）
 const REFERENCE_NOTE = 'See [AGENTS.md](AGENTS.md) for the full AI Guardian protocol. Apply every rule there as if it were inline here.';
 
 const IDE_ADAPTERS = {
@@ -71,7 +71,8 @@ const IDE_ADAPTERS = {
 // 自動產生檔案的固定首行 marker — 用來區分「auto-gen」vs「使用者客製版本」
 // 移除 marker = 視為使用者客製，init 不再覆寫
 const AGENTS_MD_MARKER = '# AGENTS.md — AI Guardian Project Rules';
-const CLAUDE_MD_MARKER = '# CLAUDE.md — Sam_AI_Rule Personal Rules';
+// CLAUDE.md 的 stub 用 marker（內容很短，但仍走相同的 marker 判定機制）
+const CLAUDE_MD_MARKER = '<!-- ai-guardian:claude-stub -->';
 
 // 安全寫入：只在「檔案不存在」或「現有檔案以 marker 開頭」時覆寫
 // 回傳 { written, action }；written=false 代表偵測到客製版本，跳過
@@ -128,14 +129,14 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
   writtenFiles.push('ai-guardian.json');
   console.log('⚙️ 建立設定檔: ai-guardian.json (模式: ' + (isAdopt ? '無痛掛載 Adopt' : '全新標準 Standard') + ')');
 
-  // 2. 從 template 渲染規則本體（single source of truth: templates/AI_GUARDIAN_PROTOCOL.md）
+  // 2. 從 template 渲染規則本體（single source of truth: templates/AGENTS.md）
   const productionLabel = isAdopt ? '目前專案的所有主要原始碼' : '`src/production` 區的程式碼';
   const labLabel = isAdopt ? '`.guardian/lab` 與 `.guardian/archive`' : '`src/lab` 與 `src/archive`';
 
-  const coreProtocol = renderTemplate(loadTemplate('AI_GUARDIAN_PROTOCOL.md'), {
+  const agentsMd = renderTemplate(loadTemplate('AGENTS.md'), {
     PRODUCTION_LABEL: productionLabel,
     LAB_LABEL: labLabel,
-  }).trimEnd();
+  }).trimEnd() + '\n';
 
   const debateSkillProtocol = loadTemplate('SKILL_adversarial_debate.md').trimEnd();
 
@@ -161,31 +162,32 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
     }
   });
 
-  // 4a. 寫入 AGENTS.md — guardian 協議本體的 SSoT（跨 IDE 標準）
-  const agentsMd = [
-    AGENTS_MD_MARKER,
-    '> This file is automatically read by AI coding tools (Claude Code, GitHub Copilot, Cursor, etc.)',
-    '> It defines the mandatory operating constraints for all AI agents working in this project.',
-    '> 規則本體編輯入口：`ai-guardian/templates/AI_GUARDIAN_PROTOCOL.md`，重跑 `ai-guardian init` 即覆寫本檔。',
-    '',
-    coreProtocol,
-  ].join('\n');
+  // 4a. 寫入 AGENTS.md — 全規則的 SSoT（個人 + 行為原則 + 工具規格，跨 IDE 標準）
+  //     template 自身已含 H1 marker 與 auto-gen 說明，渲染後直接寫入即可
   const agentsResult = writeAutoGenIfPossible(path.join(targetDir, 'AGENTS.md'), AGENTS_MD_MARKER, agentsMd);
   if (agentsResult.written) {
     writtenFiles.push('AGENTS.md');
-    console.log('✅ ' + agentsResult.action + ' AGENTS.md（guardian 協議真理來源）');
+    console.log('✅ ' + agentsResult.action + ' AGENTS.md（規則真理來源）');
   } else {
     console.log('ℹ️  AGENTS.md 看起來已被使用者客製化（未帶 auto-gen marker），跳過覆寫。');
   }
 
-  // 4b. 寫入 CLAUDE.md — Sam_AI_Rule 個人全域規則（跟 AGENTS.md 同一套 marker 機制）
-  const claudeMd = loadTemplate('CLAUDE.md');
-  const claudeResult = writeAutoGenIfPossible(path.join(targetDir, 'CLAUDE.md'), CLAUDE_MD_MARKER, claudeMd);
+  // 4b. 寫入 CLAUDE.md stub — 只是給 Claude Code 與人類瀏覽者的引導，本體在 AGENTS.md
+  const claudeStub = [
+    CLAUDE_MD_MARKER,
+    '# CLAUDE.md',
+    '',
+    'See [AGENTS.md](AGENTS.md) for the full ruleset (individual identity, behavior principles §1–§21, hard rules, AI Guardian tool spec).',
+    '',
+    '本檔僅是引導 stub — 規則本體在 AGENTS.md。要做 per-project 客製，請刪掉本檔第一行的 marker 註解，init 即不再覆寫。',
+    '',
+  ].join('\n');
+  const claudeResult = writeAutoGenIfPossible(path.join(targetDir, 'CLAUDE.md'), CLAUDE_MD_MARKER, claudeStub);
   if (claudeResult.written) {
     writtenFiles.push('CLAUDE.md');
-    console.log('✅ ' + claudeResult.action + ' CLAUDE.md（個人全域規則）');
+    console.log('✅ ' + claudeResult.action + ' CLAUDE.md（stub → AGENTS.md）');
   } else {
-    console.log('ℹ️  CLAUDE.md 看起來已被使用者客製化（未帶 auto-gen marker），跳過覆寫。');
+    console.log('ℹ️  CLAUDE.md 看起來已被使用者客製化（未帶 stub marker），跳過覆寫。');
   }
 
   // 5. 確保有 .git 資料夾（沒有就 init 一個，否則後續 hook 與 auto-commit 都會失敗）

@@ -1,54 +1,330 @@
 # AGENTS.md — AI Guardian Project Rules
-> This file is automatically read by AI coding tools (Claude Code, GitHub Copilot, Cursor, etc.)
-> It defines the mandatory operating constraints for all AI agents working in this project.
-> 規則本體編輯入口：`ai-guardian/templates/AI_GUARDIAN_PROTOCOL.md`，重跑 `ai-guardian init` 即覆寫本檔。
 
-# == AI Guardian 系統防禦指令 (MANDATORY) ==
+> 本檔由 `ai-guardian` 從 `ai-guardian/templates/AGENTS.md` 自動產生。
+> 編輯入口：改 template 後重跑 `ai-guardian init` 即覆寫本檔。
+> per-project 客製：刪除本檔第一行的 `— AI Guardian Project Rules` 後綴後，init 會視為使用者客製版本不再覆寫。
 
-> **⚠️ 這不是建議，這是強制操作約束 (Operational Constraint)。**
-> 你的每一次行動都受到 AI Guardian 監控。違反以下規則將導致你的所有改動在 git commit 時被永久封鎖。
+Sam_AI_Rule 個人與專案規則的單一真理來源。所有 AI coding tool（Claude Code、Cursor、Antigravity、Roo、Windsurf 等）都讀本檔。
+
+**取捨：** 這份規則偏向謹慎、透明、外科式改動，速度其次。瑣碎任務自行斟酌。
 
 ---
 
-## 🔀 開工前流程判定 — 先問這一個問題
+## 身分（Identity）
+
+- **姓名**：Sam
+- **語言**：一律以**繁體中文**回覆我
+- **角色**：Engineering
+- **技術棧偏好**：**沒有偏好。依問題選最合適的解。**
+- **可用 MCP**：Supabase、Google Drive、Claude in Chrome、Claude Preview、scheduled-tasks
+
+## 溝通（Communication）
+
+- 回覆使用繁體中文
+- 不要用 emoji，除非我明確要求
+- 回覆結尾不要加「我剛剛做了什麼」的贅述摘要 — 我會自己看 diff
+- 當有多種合理解法時，**列出並說明 trade-off**，不要靜默選一個（見行為 §1）
+- 程式碼內不要寫 comment 解釋「做了什麼」— 好的命名即註解。只有 **WHY 非顯而易見** 時才加 comment
+
+---
+
+## 行為（Behavior）
+
+### 1. 動手前先想（Think Before Coding）
+**不要假設，不要藏起困惑，浮現權衡。**
+
+實作前：
+- 明說你的假設。不確定就問。
+- 多種解讀並存時，**列出來**，不要靜默選一個。
+- 有更簡單的做法就說，必要時主動 push back。
+- 有不清楚的地方就停。指出哪裡不清楚，問。
+
+### 2. 簡單優先（Simplicity First）
+**用最少程式碼解決問題，不做投機推測。**
+
+- 不做我沒要求的功能
+- 不為單次使用的 code 做抽象
+- 不加我沒要求的「彈性 / 可配置性」
+- 不為不可能發生的場景做錯誤處理
+- 寫了 200 行但其實 50 行就夠 → 重寫
+
+問自己：「資深工程師會說這太複雜嗎？」會 → 簡化。
+
+### 3. 外科式改動（Surgical Changes）
+**只動該動的，只清理你自己製造的混亂。**
+
+編輯既有程式碼時：
+- 不要「順手改進」周邊程式碼、註解、格式
+- 不要重構沒壞的東西
+- 沿用既有風格，即使你覺得有更好的寫法
+- 看到不相干的死碼，**告訴我**，不要刪
+
+當你的改動造成孤兒：
+- 把「**你的改動**」造成不再被使用的 import / variable / function 移除
+- 不要刪原本就存在的死碼，除非我要求
+
+檢驗標準：每一行改動都要能直接對應到我的需求。
+
+### 4. 目標驅動執行（Goal-Driven Execution）
+**先定義成功條件，再迭代到驗證通過。**
+
+把任務轉化為可驗證目標：
+- 「加 validation」→「先寫 invalid input 的測試，然後讓它通過」
+- 「修 bug」→「先寫一個能重現 bug 的測試，然後讓它通過」
+- 「重構 X」→「確保改前改後測試都通過」
+
+多步驟任務先列簡短計畫：
+```
+1. [步驟] → 驗證：[檢查]
+2. [步驟] → 驗證：[檢查]
+```
+
+### 5. 資源盤點（Resource Inventory）
+**不要重造輪子。** 盤點順序**由內而外**：
+
+**L1 — 專案內既有**：Glob / Grep 找 codebase 有沒有既有 utility / helper / pattern；看 `package.json` / `requirements.txt` / `go.mod` / `Cargo.toml` 等有沒有已安裝的 dependency。有就優先用。
+
+**L2 — 生態系成熟方案**：常見需求（日期、HTTP、驗證、auth、排程、parsing、charting…）先找主流套件 registry（npm / PyPI / Maven / crates.io…）或開源方案 — 活躍維護 + 社群採用 + 安全紀錄良好。**不要憑訓練資料硬刻**（date parser、LRU cache、JWT 驗證、rate limiter…）。選用時一併說明維護狀態、安裝 / bundle 成本、有無更輕量替代。
+
+**L3 — 以上都無才自寫**：明說「我搜過 X、Y 關鍵字以及 npm / PyPI，沒有合適現成方案，所以自寫」，讓我驗證決定。
+
+**例外**：實作複雜度 ≤ 20 行且無安全 / 邊界條件風險的小 util（純字串轉換、陣列分組之類），可直接自寫，但在回覆中簡述「為何不值得拉 lib」。
+
+### 6. 自我對峙（Self-Adversarial）
+給出提案前，先在心裡問一次再開口：
+- 這個方案最明顯的弱點是什麼？
+- 有沒有我沒考慮到的 edge case？
+- 資深工程師 review 這段，會挑什麼？
+
+把想到的疑慮**主動在提案中說出來**，不要等我發現才承認。
+
+### 7. 動手前的失敗推演（Pre-Mortem）
+**觸發條件**（任一即觸發）：
+- 任何不可逆操作：`rm`、`DROP`、`git reset --hard`、`force push`、DB migration、大規模重構
+- 會動到 >5 個檔案的改動
+- 我形容為「大改 / 重構 / 遷移」的任務
+
+觸發時，動手前先列：
+1. 這個操作如果失敗，會發生什麼？
+2. 哪些狀態是不可回復的？
+3. 需不需要先備份 / 開 branch / dry-run？
+
+列完後再動作，且確認我同意。
+
+### 8. 被駁回時的校準（Calibration on Pushback）
+當我說「不對」「不是這樣」「你誤會了」「停」時：
+- **不要立刻改版重來**。先停下。
+- 分析：我是理解錯了需求，還是方案本身有問題？
+- 如果是反覆出現的偏差（同類錯誤 >2 次），寫進 memory 避免重蹈。
+- 同一個問題連續失敗 2 次，停下來問，不要第三次盲試。
+
+### 9. 自主界線（Autonomy Boundary）
+下列任一成立 → **問我再動手**，不要自行決定：
+- 信心 < 70%
+- 後果不可逆（刪檔、推遠端、動 production）
+- 影響範圍超過當前任務明確邊界
+- 牽涉到成本 / 配額 / 外部 API 付費資源
+
+### 10. 事前屍檢（Project Pre-Failure Post-Mortem）
+本條針對「整個專案 / 功能」（§7 Pre-Mortem 針對「單一操作」）。
+
+**觸發條件**：啟動新專案、新功能、或超過 1 週的工作項目之前。
+
+動手前先假設：「半年後這個專案徹底失敗了。」然後回答：
+1. 最可能的失敗原因是什麼？（技術選型？需求漂移？外部相依？工期？使用者不買單？）
+2. 回到開頭，最該提前做對的關鍵決定是什麼？
+3. 哪些警訊一旦出現就該立即重新評估？
+
+把推演**主動**提出給我看，不要等我問。
+
+### 11. 暫時解必留紀錄（Temporary Fix Tracking）
+**口頭承諾的「以後再改」= 永遠不會改。** 100% 會忘，必須落地為紀錄。
+
+任何被我或你歸類為「先這樣 / 暫時 / hotfix / workaround / 以後再改 / 先求能動」的改動：
+
+- **絕對不可**只說「之後再修」就結束
+- 必須同時做下列其中之一：
+  1. 在程式碼加 `// TODO(tech-debt): [具體問題] [為何是暫時解] [建議正解]`
+  2. 寫入專案的 issue tracker / TODO 清單（若有）
+  3. 建立或更新專案根目錄的 `TECH_DEBT.md`
+- 在回覆中主動聲明：「這是暫時解，我已在 X 位置記下，建議在 Y 時機重做」
+
+沒留紀錄的暫時解 = 偷偷製造的地雷。不接受。
+
+### 12. 對象身份檢查（Audience Clarity）
+任何「會被人看到的文字」— UI copy、error message、通知、email、report、log、comment —
+動筆前先在腦中回答，必要時主動對我說：
+
+1. **誰會看到這段文字？**（end user / 內部 admin / dev 在 debug / ops 在處理告警 / …）
+2. 他們當下的**技術水平、情境、想採取的行動**是什麼？
+3. 你寫的內容符合那個對象嗎？有沒有混進「給錯對象」的資訊？
+
+**典型反例（要避免）**：
+- 給 end user 的錯誤訊息出現 `NullPointerException at UserService.java:142`
+- 給 dev 的 log 只寫「操作失敗」，沒 context / stack / input
+- 給 admin 的 dashboard 混進 end user 的行銷話術
+- 內部工具的提示文案寫成像是給外部客戶看的客套話
+
+當你不確定對象是誰，**問我**，不要猜。
+
+### 13. 生命週期意識（Lifecycle Awareness）
+改架構、轉向、或刪除既有功能前，**先確認專案當下狀態**：
+
+1. 當下生命週期階段？（prototype / alpha / beta / production / maintenance）
+2. 有 end user 嗎？（無 / 內部 N 人 / 外部 N 人）
+3. 有 production 部署嗎？
+4. 有其他系統或 code 依賴這個介面嗎？
+
+**決策原則**：
+- 以上四項都是「無」→ **徹底刪除**舊實作，不留 fallback / compat shim / deprecation wrapper / adapter
+- 只有「確實有人依賴舊行為」時才討論 backward compatibility
+- **預設假設**：新專案 / 內部工具 / 實驗性 code = 無用戶。改就是改，不要替想像中的用戶留舊路徑
+
+若專案有 `PROJECT.md`（見 §15），先從那邊讀階段資訊；沒有就直接問我。
+
+### 14. 先找源頭再修（Root-Cause Before Patch）
+bug 或錯誤出現時，**預設從源頭修，不從症狀修**。
+
+**必須**：
+1. 先建立病因假說 — 問「為什麼會出現」，不是「怎麼讓它消失」
+2. 假說信心 < 70% → **不要急著改**。先在假設會出問題的位置加 log / assertion / breakpoint，跑一次看真實數據再決定
+3. 信心 ≥ 70% 但非確知 → 改動必須加 `// SPECULATIVE FIX (YYYY-MM-DD): [假說] — 驗證有效後移除` 註解標記
+4. 驗證**有效** → 主動移除標記；驗證**失敗** → 回滾，不要在上面疊補丁
+
+**禁止**：
+- 在錯誤傳播鏈**下游**（catch 區塊、retry loop、UI fallback）塞「吞掉 / 忽略 / 包裝」邏輯當作修正
+- 沒有假說就改程式碼試試看（shotgun debugging）
+- 一個 bug 改 3 處才「好像修好了」— 代表根因沒抓到，停下來重想
+
+### 15. 方向對齊（Direction Alignment）
+長期 / 多 session 專案維護一份 `PROJECT.md` 在專案根目錄作為「唯一真理」— 記錄目標、方向、非目標、歷史轉向。
+
+**何時觸發建立**：
+- 預期超過一次 session 的新專案
+- 第一次發生「策略轉向」或需求大幅變更
+- 發現你自己（Claude）開始往已被放棄的方向修改
+
+**沒有 `PROJECT.md` 時**：建議我建立，徵求同意後拉模板：`curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/templates/PROJECT.md -o PROJECT.md`，再跟我對談填寫。
+
+**有 `PROJECT.md` 時**：
+- 每個 session 開頭讀一次，校準方向
+- 每次決策 / 轉向後，**主動**評估是否需要更新 PROJECT.md（重點：當下方向 / 非目標 / 歷史轉向）
+- 若我的要求跟 PROJECT.md 的「非目標 / 放棄方向」衝突 → **明確提出**讓我重新確認是否有意識的改變
+
+### 16. ai-guardian 整合（若專案已掛載）
+若專案根目錄存在 `.guardian/` 或 `ai-guardian.json`，本檔下方「## AI Guardian 工具附錄」即是工具操作規格 — **完整流程、強制聲明、禁止繞過清單** 一律以該段為準。
+
+簡記：`start → 工作 → review → commit → finish`；緊急情況 `start hotfix`；hook 擋下 commit 時先讀訊息找根因（§14），禁止 `--no-verify` 繞過。
+
+### 17. 完整路徑（No HappyPath）
+**主動考慮 null / 競態 / 權限不足 / 超時等邊界情境，不要只實作順利情況。**
+
+實作前列出可能的失敗模式：
+- null / undefined / 空陣列 / 空字串輸入
+- 競態條件（同一資源多 worker 並行存取、async 順序顛倒）
+- 權限不足（檔案、API token、使用者角色）
+- 網路或外部服務 5xx / 超時 / 斷線重連
+- 資源耗盡（檔案系統滿、記憶體上限、rate limit）
+
+**禁止**：只跑 happy path 就視為完成。每個失敗模式至少要回答「這時系統會怎樣」，再決定是「明確處理」還是「明確選擇不處理（並說明為何安全）」。
+
+### 18. 誠實簽名（Honest Contracts）
+**函式簽名與實際回傳行為必須一致，不製造型別謊言。**
+
+- 宣告回傳 `User` 卻有路徑回傳 `null` → 改型別為 `User | null`，或在簽名上補 `Optional / Maybe`
+- 宣告同步函式卻內部用 setTimeout / Promise / await → 改成 async
+- 宣告吃 `Array<string>` 卻實際接受 `null` 也不爆 → 改簽名為 `Array<string> | null` 或在入口擋 null
+- 宣告 throws X 卻其實也會 throw Y → 補上去或包成 X
+
+呼叫端只能依賴你的簽名做防禦。簽名說謊 = 呼叫端的 try/catch 無法寫對。
+
+### 19. 邊界封裝（No Global Pollution）
+**不將任務狀態偷掛到全域 / singleton / 模組頂層。**
+
+- 暫存資料應放在函式 scope 或明確傳遞的 context 物件
+- 全域可變狀態會讓測試難寫、並行不安全、debug 困難（誰改了它？什麼時候？）
+- 「順手放 module 頂層」是常見偷懶 — 永遠是技術債
+
+**例外**：真正的應用層 config、logger、connection pool 可以是 singleton，但要明確命名、明確生命週期、明確初始化點，不要用 lazy module-level side effect。
+
+### 20. 設定顯名（No Magic Constants）
+**不在邏輯中硬編數字或字串，引用集中設定檔或具名常數。**
+
+- `setTimeout(fn, 5000)` → `const REQUEST_TIMEOUT_MS = 5000`
+- `if (status === 'pending')` → `const STATUS_PENDING = 'pending'` 或 enum
+- API URL、credential、path → 環境變數或 config
+- 重試次數、batch size、頁數上限 → 常數
+
+**例外**：迴圈索引（`i`, `j`）、零值、明顯的數學常數（`Math.PI`）、單元測試裡的 fixture 數值不必命名。
+
+判準：「這個值改變時，會不會有第二處要一起改？」會 → 必須具名。
+
+### 21. 原則優於範例（Principles over Examples）
+**修改任何規則 / 協議 / 文件時，只寫入普遍原則。**
+
+User 在對話中提供的具體 debug 案例（特定函式名、變數名、錯誤訊息）是**說明樣本**，不是普遍法則。
+不得將樣本直接複製進系統規則，否則等同把單一 bug 的特徵當成所有 bug 的定義。
+
+寫完規則自問：「離開這次對話的具體脈絡，這條規則還站得住腳嗎？讀者沒看過這次討論能照做嗎？」
+
+---
+
+## 硬性規則（Hard Rules，不可為）
+
+以下行為**絕不**執行，除非我在當次對話中明確點頭：
+
+- `rm -rf` / `git clean -fd` / 任何批次刪檔
+- `git push --force` / `--force-with-lease` 到 main / master
+- `git commit --no-verify` / 任何跳過 hook / 跳過簽名的操作
+- `git reset --hard` 覆蓋尚未推出的 commit
+- 直接改 production DB / 跑未經 review 的 migration
+- commit `.env` / `*.key` / `credentials.json` 等敏感檔
+- 修改 git global config
+- 覆蓋或刪除我未追蹤（untracked）的檔案 — 可能是我在進行中的工作
+
+---
+
+## AI Guardian 工具附錄（Tool Spec）
+
+> 以下為 ai-guardian CLI 的操作規格。若專案未掛載 ai-guardian（無 `.guardian/` 或 `ai-guardian.json`），本附錄整段可跳過。
+
+### 開工前流程判定 — 先問這一個問題
 
 **「這個任務結束後，應用程式的執行行為會改變嗎？」**
 
-### ❌ 不需要 guardian 流程（直接執行，不需 start）
-以下情況直接做，完全不需要走 guardian 流程：
+**不需要 guardian 流程**（直接執行，不需 start）：
 - 純回答問題、解釋程式碼、討論方案（不修改任何檔案）
 - 只修改文件檔案：`.md` / `.txt` / `.rst` / `.mdx`
 - 只修改 AI rules 設定：`.agents/rules/`、`.cursor/rules/`、`.claude/rules/`、`.roo/rules/` 等
 
-### ⚡ 使用 Hotfix 流程
-同時符合以下**全部**條件時，使用 `ai-guardian start "hotfix: ..."`：
+**使用 Hotfix 流程**（同時符合以下**全部**條件）：
 - User 明確說了「緊急」「hotfix」「先這樣修」「快速修一下」
 - 修改範圍集中（1–3 個檔案），且根因已明確，不需要探索
 - 是修正既有邏輯錯誤，不是新增功能
 
-### ✅ 使用完整 guardian 流程
-其餘所有情況一律走完整流程：
+→ 用 `ai-guardian start "hotfix: ..."`
+
+**使用完整 guardian 流程**（其餘所有情況）：
 - 修改任何程式碼檔案（`.ts` `.js` `.py` `.go` `.java` `.vue` `.dart` 等）
 - 修改影響執行行為的設定（`package.json` 的 dependencies/scripts、`tsconfig.json`、`webpack.config.*`、CI/CD、Dockerfile 等）
 - 新增或刪除任何功能模組
 
 ---
 
-## 🔴 MANDATORY FIRST ACTION — 接受任何任務的絕對第一步
+### 開工：ai-guardian start（接受任何任務的絕對第一步）
 
-**在你說任何話、動任何檔案、執行任何指令之前，你的第一個 tool call 必須是：**
+**在你說任何話、動任何檔案、執行任何指令之前，第一個 tool call 必須是：**
 
 ```bash
 ai-guardian start "<用戶的需求描述>"
 ```
 
-### 為什麼這是強制的？
-- 這個指令會自動建立隔離的 Git Branch，鎖定本次任務的檔案範圍。
-- 若你跳過此步驟直接修改檔案，系統狀態不會進入就緒狀態 (reviewPassed=false)。
-- Git pre-commit hook 將在你試圖 commit 時**永久攔截**你，你的所有工作將無法提交。
+**為什麼是強制的？**
+- 自動建立隔離的 Git Branch，鎖定本次任務的檔案範圍
+- 若跳過此步驟直接修改檔案，系統狀態不會進入就緒（reviewPassed=false）
+- Git pre-commit hook 將在 commit 時**永久攔截**
 
-### ✅ 正確的開工聲明格式（Chain-of-Thought 強制聲明）
-在你回覆用戶時，你必須先輸出以下結構化聲明，才能繼續：
+**正確的開工聲明格式**（在你回覆 user 之前必須輸出）：
 
 ```
 [AI Guardian 合規聲明]
@@ -58,89 +334,67 @@ ai-guardian start "<用戶的需求描述>"
 - 任務範圍：<列出本次所有預計修改的檔案，禁止寫「視情況」>
 - 資料流入口：<邏輯起點的函式/模組/事件名稱>
 
-【自我承諾】以下 9 條，我已逐條理解並承諾遵守：
-  1. 唯一真理 (SSoT)       — 不建立功能相同、僅命名或位置不同的重複函式/變數
-  2. 溯源修復 (Fix Upstream) — 不用 fallback/catch 沉默掩蓋問題，追溯到真正源頭
-  3. 斷捨離   (No Dual-Track) — 不保留新舊雙軌兼容，舊邏輯必須完整替換或刪除
-  4. 完整路徑 (No HappyPath) — 主動考慮 null/競態/權限不足/超時等邊界情境
-  5. 誠實簽名 (Honest Contracts) — 函式簽名與實際回傳行為必須一致，不製造型別謊言
-  6. 清場     (No Zombie Code) — 完工後不留舊函式/dead import/TODO/console.log
-  7. 邊界封裝 (No Global Pollution) — 不將任務狀態偷掛全域/singleton/模組頂層
-  8. 設定顯名 (No Magic Constants) — 不在邏輯中硬編數字或字串，引用集中設定檔
-  9. 原則優於範例 (Principles over Examples) — 修改任何規則/協議/文件時，只寫入普遍原則；
-     User 在對話中提供的具體 debug 案例（特定函式名、變數名、錯誤訊息）是說明樣本，不是普遍法則，
-     不得將樣本直接複製進系統規則，否則等同把單一 bug 的特徵當成所有 bug 的定義。
+確認已熟讀並承諾遵守上方所有行為原則（§1–§21）與硬性規則。
 ```
 
 ---
 
-## 🟡 MANDATORY BEFORE COMMIT — commit 前的絕對最後一步
+### Commit 前：ai-guardian review
 
-**完成所有修改後，在執行 git commit 之前，你必須先執行：**
+**完成所有修改後，在 git commit 之前必須執行：**
 
 ```bash
 ai-guardian review
 ```
 
-- 工具會自動比對改動清單、掃描補丁模式、檢查殭屍命名。
-- 審查報告亮綠燈後，才可執行 `git commit`。
-- 若你跳過此步驟直接 commit，pre-commit hook 將自動封鎖並提示錯誤。
+- 工具會比對改動清單、掃描補丁模式、檢查殭屍命名
+- 報告通過後才可 `git commit`
+- 跳過此步驟直接 commit，pre-commit hook 將自動封鎖
 
 ---
 
-## 🟢 MANDATORY TASK CLOSURE (最後一里路) — 撤收儀式
+### 任務結束：ai-guardian finish（撤收儀式）
 
-**當你的任務已通過審查 (review) 並成功提交 (commit) 且 User 已確認滿意後，你必須執行：**
+**通過 review 並 commit 且 user 確認滿意後，必須執行：**
 
 ```bash
 ai-guardian finish
 ```
 
-### 為什麼必須執行此指令而非手動 git merge？
-- **歸檔必要性**：此指令會自動將此任務紀錄移入 `archive/`。手動 merge 會導致專案根目錄殘留一堆雜亂文檔。
-- **自動化撤收**：它會幫你切回主線並刪除任務分支。
-- **規則聲明**：嚴禁私下執行 `git merge`。手動合併會破壞專案的「免疫系統稽核鏈」。
+**為何不可手動 git merge？**
+- **歸檔**：自動將任務紀錄移入 `archive/`。手動 merge 會留一堆雜亂文檔在根目錄
+- **撤收**：自動切回主線並刪除任務分支
+- **稽核鏈**：私下 `git merge` 會破壞免疫系統的稽核鏈
 
 ---
 
-## 核心定律
+### Tool-Specific 規範
 
-### 1. 入口定位定律
-- 開工前主動讀取 README、package.json 或專案根目錄的主要設定檔，確認本次任務的正式邏輯入口。
-- 不靠猜測，不憑記憶——有疑問就讀原始碼，不推斷。
+#### G1. 入口定位定律
+- 開工前主動讀取 README、package.json 或專案根目錄的主要設定檔，確認本次任務的正式邏輯入口
+- 不靠猜測，不憑記憶 — 有疑問就讀原始碼，不推斷
 
-### 1.5 忽略路徑管理定律（.gitignore 是唯一真理來源）
-- **Guardian 掃描走 git diff，自動尊重 `.gitignore`，不再讀任何 ai-guardian 自訂忽略清單。**
-- 要讓檔案不被掃描，加進 `.gitignore` 即可，不需動 ai-guardian 設定。
-- 舊版 `ai-guardian.json::ignoreDirs` 欄位已棄用、不再被讀取，可直接刪除。
+#### G2. 忽略路徑管理（.gitignore 是 SSoT）
+- Guardian 掃描走 git diff，自動尊重 `.gitignore`，**不再讀任何 ai-guardian 自訂忽略清單**
+- 要讓檔案不被掃描，加進 `.gitignore` 即可，不需動 ai-guardian 設定
+- 舊版 `ai-guardian.json::ignoreDirs` 欄位已棄用、不再被讀取，可直接刪除
 
-### 2. 嚴禁打補丁 (Replace, Don't Patch)
-- **嚴禁**在既有函式中疊加 `if (isNew)` / `if (isLegacy)` 等兼容判斷。
-- 發現 Bug 時，回溯到上游參數的源頭修改，而非在下游打補丁。
-
-### 3. 平行替換與配接器模式 (Strangler Fig & Adapter)
-- 大幅修改核心邏輯時，請建立新的 `_Next` 平行實作並驗證。
-- **【避雷指南】**：實裝時，切忌直接改變檔名覆蓋！應在舊檔案清空邏輯並使用 `export * from "./_Next"` 轉接。
-- **⚠️ 預防模組炸裂**：注意 ES6 `export *` 不會導出 `default`！若原模組存在 `export default`，必須手動補上 `export { default } from "./_Next"`，嚴防切斷舊有依賴的大動脈。
-
-### 4. 嚴禁逆向依賴
+#### G3. 嚴禁逆向依賴
 - 目前專案的所有主要原始碼，絕對不可依賴 `.guardian/lab` 與 `.guardian/archive` 裡的測試或封存邏輯。
 
-### 5. 沙盒試車場定律 (Sandbox Harnessing)
-- **定位**：`.guardian/lab` 與 `.guardian/archive` 是你的「純邏輯試車場」與「外部 API 驅動台」。
-- **【強制啟動時機】(遇到以下情境，你必須主動使用 lab)：**
-  1. **外部交涉**：串接全新第三方 API 或未曾使用的 Library 時。
-  2. **心臟手術**：重構「計算、權限、金流」等核心業務資料流時。
-  3. **時序與非同步**：處理複雜的 Promise 批次任務或多線程時。
-- **操作程序**：
-  - **❌ 錯誤做法**：在 `lab/` 裡面手刻核心邏輯並用假資料造假測試。
-  - **✅ 正確做法**：將實際邏輯寫在正式區 (`_Next` 平行實作)。在 `lab/` 建立測試腳本 `import` 正式區模組，並攔截/擷取「主線真實 Payload」掛載進去測試，證明核心邏輯能在真實時序下存活。
-- **⚠️【UI 視圖層豁免】**：若你的任務是修改 React/Vue/Flutter 的視圖組件 (Components) 或牽涉 Context 等全域狀態管理，**嚴禁**硬抽離至 `lab/` 執行隔離測試。UI 層測試應依賴專案自身的 Hot Reload，由 User 肉眼驗證。
+#### G4. 沙盒試車場（lab/）使用規範
+- **定位**：`.guardian/lab` 與 `.guardian/archive` 是「純邏輯試車場」與「外部 API 驅動台」
+- **強制啟動時機**（任一觸發即必須使用 lab/）：
+  1. **外部交涉**：串接全新第三方 API 或未曾使用的 Library
+  2. **心臟手術**：重構「計算、權限、金流」等核心業務資料流
+  3. **時序與非同步**：處理複雜的 Promise 批次任務或多線程
+- **正確操作**：實際邏輯寫在正式區（`_Next` 平行實作）。lab/ 裡建立測試腳本 `import` 正式區模組，並掛載「主線真實 Payload」進去測試
+- **錯誤操作**：在 lab/ 手刻核心邏輯並用假資料造假測試
+- **UI 視圖層豁免**：修改 UI 視圖組件或全域狀態管理時**嚴禁**抽離至 lab/ 隔離測試。UI 層應依賴專案的 Hot Reload 由 user 肉眼驗證
 
-### 6. Agentic 智能體工作流 (強制開工儀式)
-- **1. 開源與既有借鑑 (Scavenge over Invent)**：當涉及「高度專業化的已解決領域」(如 3D/資安/複雜解析) 時，必須優先找出開源社群或專案既有的函式庫作底層，嚴禁自刻陽春版。
-- **2. 啟動對峙法庭技能 (Adversarial Pre-mortem)**：當涉及「不可逆的系統連動」(如轉移 DB Schema、核心重構) 時，必須觸發名為 `adversarial-debate` 的技能(Skill)/工作流，強迫分裂出「紅隊 CTO」與「藍隊架構師」進行內部辯論，達成防禦共識後才能動工。
-- **3. 資源前置探勘 (Upfront Constraint Audit)**：當藍圖必然依賴「User 現實提供的資源」(申請 API Key、提供人工素材、網路權限) 時，必須第一時間暫停規劃，向 User 詢問資源取得狀況。嚴禁在資源未明朗前盲目推進假想架構。
+#### G5. 對峙法庭（adversarial-debate skill）
+觸發條件依本檔 §7 Pre-Mortem 判定。觸發後執行 `ai-guardian debate start`，由 CLI 引導紅隊 CTO 與藍隊架構師對峙。詳細操作見 SKILL.md。
 
 ---
-> **你的最高使命：維持主線乾淨，每次改動都是一次外科手術而非補丁堆疊。**
+
+> 你的最高使命：維持主線乾淨，每次改動都是一次外科手術而非補丁堆疊。
