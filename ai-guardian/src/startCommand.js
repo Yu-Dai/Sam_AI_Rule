@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { execSync } = require('child_process');
 const { createBaseline } = require('./utils/gitBaseline');
 const { checkRemoteSync, STATUS: SYNC_STATUS } = require('./utils/syncCheck');
+const { loadTemplate, renderTemplate } = require('./utils/templates');
 
 // git status --porcelain 每行前綴：兩個狀態字元 + 一個空白
 const STATUS_PORCELAIN_PREFIX_LEN = 3;
@@ -233,47 +234,13 @@ async function runStart(projectRoot, taskDescription, options = {}) {
 
   fs.writeFileSync(manifestPath, JSON.stringify(taskManifest, null, JSON_INDENT), 'utf-8');
 
-  // [P5] current-task.md 精簡版：只含任務專屬資訊，永久規則已在 AGENTS.md / IDE rules 中
-  const manifestMd = `# 🛡️ AI Guardian 任務宣言
-
-> 全域防護規則已由 AGENTS.md / IDE Rules 載入。本檔案只記錄**本次任務專屬資訊**，請勿在此尋找全域規則。
-
-## 任務描述
-${taskDescription}
-
-## 任務分支
-\`${branchName}\`
-
-## 開始時間
-${now}
-
----
-
-## 🚀 Pre-flight Checkout（開工前必填，完成後才能動工）
-
-請依以下格式輸出你的開工分析報告，並等待 User 確認後再動手：
-
-### 1. 🔍 開源借鑑 (Scavenge over Invent)
-【觸發條件】任務涉及非專案專屬的通用技術（基礎架構、加解密、標準通訊協定）
-→ （填寫評估，或寫「本次任務無需」）
-
-### 2. 🪓 對峙驗屍 (Adversarial Pre-mortem)
-【觸發條件】任務包含不可逆的系統破壞/連動（DB Schema 遷移、核心狀態重構）
-→ （若需要，執行 \`ai-guardian debate start\`；否則寫「本次任務無需」）
-
-### 3. 🧱 資源前置探勘 (Upfront Constraint Audit)
-【觸發條件】任務必然依賴 User 提供的外部資源（API Key、素材、機器權限）
-→ （列出需要的資源，或寫「本次任務無需」）
-
----
-
-## ✅ 完工程序
-\`\`\`bash
-ai-guardian review    # 改動審查（必須通過才能 commit）
-git commit
-ai-guardian finish    # 任務完結，自動合併主線並清理現場
-\`\`\`
-`;
+  // current-task.md 從 template 渲染：承載 7 條動工前裁決規則的完整內容（Q1-Q7）+ 本次任務承諾
+  // 規則本體 SSoT 在 ai-guardian/templates/current-task.md，要修內容請改 template
+  const manifestMd = renderTemplate(loadTemplate('current-task.md'), {
+    TASK_DESCRIPTION: taskDescription,
+    BRANCH_NAME: branchName,
+    START_TIME: now,
+  });
   fs.writeFileSync(path.join(guardianDir, 'current-task.md'), manifestMd, 'utf-8');
 
   // [P2] 明確指示 AI 必須讀取任務宣言後才能繼續，確保 Pre-flight 不被跳過

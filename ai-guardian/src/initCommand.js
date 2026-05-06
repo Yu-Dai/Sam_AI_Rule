@@ -1,24 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { loadTemplate, renderTemplate } = require('./utils/templates');
 
 // JSON.stringify 縮排寬度
 const JSON_INDENT = 2;
-
-// 規則本體與 SKILL 的 single source of truth
-// 任何規則文字的修改，請改 templates/AGENTS.md，不要回頭塞 JS 字串
-const TEMPLATES_DIR = path.join(__dirname, '..', 'templates');
-
-function loadTemplate(filename) {
-  return fs.readFileSync(path.join(TEMPLATES_DIR, filename), 'utf-8');
-}
-
-function renderTemplate(content, vars) {
-  return Object.keys(vars).reduce(
-    (acc, key) => acc.split('{{' + key + '}}').join(vars[key]),
-    content
-  );
-}
 
 // IDE 配接器：每個 IDE 只描述「我的 rule 檔放哪、用什麼 frontmatter、要不要 skill」
 // 不再夾帶規則本體 — 規則只活在 templates/AGENTS.md（即部署到根目錄的 AGENTS.md SSoT）
