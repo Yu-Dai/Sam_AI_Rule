@@ -26,7 +26,7 @@ _pause_on_exit() {
 trap _pause_on_exit EXIT
 
 # 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
-if [ ! -d ai-guardian ] || [ ! -f CLAUDE.md ]; then
+if [ ! -d ai-guardian ] || [ ! -d ai-guardian/templates ]; then
   echo "[error] 此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $PWD）" >&2
   echo "        正確做法：" >&2
   echo "          cd <project>" >&2

@@ -1,4 +1,4 @@
-# CLAUDE.md
+# CLAUDE.md — Sam_AI_Rule Personal Rules
 
 Claude Code 全域行為規則，每個 session 跨所有專案載入。
 

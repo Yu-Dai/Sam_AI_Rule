@@ -52,6 +52,9 @@ coverage/
 /.windsurf/
 /.roo/
 
+# === 本機部署測試暫存目錄（不入庫） ===
+/TEST/
+
 # AI Guardian – 暫存任務狀態（不納入版本控制）
 .guardian/current-task.json
 .guardian/current-task.md

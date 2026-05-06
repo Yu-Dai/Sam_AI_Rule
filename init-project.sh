@@ -6,11 +6,12 @@
 #   bash init-project.sh
 #
 # 行為（操作目標都是 parent，即專案根目錄）：
-#   1. 複製 CLAUDE.md 到 parent（若已存在則跳過）
+#   1. 從 ai-guardian/templates/CLAUDE.md 複製 CLAUDE.md 到 parent（若已存在則跳過）
+#      若使用者選擇步驟 4 的 ai-guardian adopt，CLAUDE.md 也會由 adopt 帶 marker 重新產生
 #   2. (詢問) 複製 PROJECT.md 模板到 parent
 #   3. (詢問) 把 Sam_AI_Rule/ 加到 parent 的 .gitignore
 #      （避免 ai-guardian adopt 把 Sam_AI_Rule 內的程式碼納入掃描）
-#   4. (詢問) cd 到 parent 後執行 ai-guardian adopt 掛載守衛
+#   4. (詢問) cd 到 parent 後執行 ai-guardian adopt 掛載守衛（會同步生成 AGENTS.md + CLAUDE.md）
 
 set -e
 
@@ -26,7 +27,7 @@ _pause_on_exit() {
 trap _pause_on_exit EXIT
 
 # 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
-if [ ! -f CLAUDE.md ] || [ ! -d ai-guardian ] || [ ! -d templates ]; then
+if [ ! -d ai-guardian ] || [ ! -d ai-guardian/templates ] || [ ! -d templates ]; then
   echo "[error] 此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $PWD）" >&2
   echo "        正確做法：" >&2
   echo "          cd <project>/Sam_AI_Rule" >&2
@@ -42,11 +43,11 @@ echo "Sam_AI_Rule 路徑：$SAM_AI_DIR"
 echo "專案根目錄：$TARGET"
 echo
 
-# 1. CLAUDE.md
+# 1. CLAUDE.md（template 在 ai-guardian/templates/，不在根目錄）
 if [ -f "$TARGET/CLAUDE.md" ]; then
   echo "[skip] $TARGET/CLAUDE.md 已存在"
 else
-  cp CLAUDE.md "$TARGET/"
+  cp ai-guardian/templates/CLAUDE.md "$TARGET/CLAUDE.md"
   echo "[ok] CLAUDE.md → $TARGET/"
 fi
 

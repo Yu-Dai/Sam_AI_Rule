@@ -22,7 +22,7 @@ $exitCode = 0
 
 try {
     # 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
-    if (-not ((Test-Path 'ai-guardian') -and (Test-Path 'CLAUDE.md'))) {
+    if (-not ((Test-Path 'ai-guardian') -and (Test-Path 'ai-guardian\templates'))) {
         $msg = @"
 此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $(Get-Location)）
 正確做法：
