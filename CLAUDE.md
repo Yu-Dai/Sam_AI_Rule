@@ -208,18 +208,10 @@ bug 或錯誤出現時，**預設從源頭修，不從症狀修**。
 - 若我的要求跟 PROJECT.md 的「非目標 / 放棄方向」衝突 → **明確提出**讓我重新確認是否有意識的改變
 
 ### 16. ai-guardian 整合（若專案已掛載）
-若專案根目錄存在 `.guardian/` 或 `ai-guardian.json`，代表此專案已掛載 ai-guardian 程式碼守衛 CLI。**遵守其 workflow，不要繞過**：
+若專案根目錄存在 `.guardian/` 或 `ai-guardian.json`，代表此專案已掛載 ai-guardian 程式碼守衛 CLI。
 
-- 開始任務前：執行 `ai-guardian start "<任務描述>"`，**不要直接動 code**
-- commit 前：執行 `ai-guardian review`，通過後才能 `git commit`
-- 任務結束：執行 `ai-guardian finish` 合併主線
-- 緊急修復：用 `ai-guardian start hotfix`（一次性繞過 + audit log），不要私自跳過
-
-**禁止繞過**（除非我明確同意）：
-- 直接 `git commit --no-verify` 跳過 pre-commit hook
-- 刪除 `.guardian/` 重置狀態避開審查
-
-ai-guardian 的 AST 阻擋擋下你的 commit 時，**先讀錯誤訊息找根因**（§14），不要塞補丁繞過。
+- **完整流程、強制聲明、禁止繞過清單** 一律以該專案的 `AGENTS.md` 為唯一真理來源 — 別在這份 CLAUDE.md 找細節，避免 drift。
+- 簡記：`start → 工作 → review → commit → finish`；緊急情況 `start hotfix`；hook 擋下 commit 時先讀訊息找根因（§14），禁止 `--no-verify` 繞過。
 
 ---
 

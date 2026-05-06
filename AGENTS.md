@@ -1,6 +1,7 @@
 # AGENTS.md — AI Guardian Project Rules
 > This file is automatically read by AI coding tools (Claude Code, GitHub Copilot, Cursor, etc.)
 > It defines the mandatory operating constraints for all AI agents working in this project.
+> 規則本體編輯入口：`ai-guardian/templates/AI_GUARDIAN_PROTOCOL.md`，重跑 `ai-guardian init` 即覆寫本檔。
 
 # == AI Guardian 系統防禦指令 (MANDATORY) ==
 
@@ -57,7 +58,7 @@ ai-guardian start "<用戶的需求描述>"
 - 任務範圍：<列出本次所有預計修改的檔案，禁止寫「視情況」>
 - 資料流入口：<邏輯起點的函式/模組/事件名稱>
 
-【自我承諾】以下 8 條，我已逐條理解並承諾遵守：
+【自我承諾】以下 9 條，我已逐條理解並承諾遵守：
   1. 唯一真理 (SSoT)       — 不建立功能相同、僅命名或位置不同的重複函式/變數
   2. 溯源修復 (Fix Upstream) — 不用 fallback/catch 沉默掩蓋問題，追溯到真正源頭
   3. 斷捨離   (No Dual-Track) — 不保留新舊雙軌兼容，舊邏輯必須完整替換或刪除
@@ -108,12 +109,10 @@ ai-guardian finish
 - 開工前主動讀取 README、package.json 或專案根目錄的主要設定檔，確認本次任務的正式邏輯入口。
 - 不靠猜測，不憑記憶——有疑問就讀原始碼，不推斷。
 
-### 1.5 忽略路徑管理定律（Guardian 掃描的唯一真理來源）
-- **Guardian 的掃描（review / start snapshot / guard AST）讀的是 `ai-guardian.json` 的 `ignoreDirs`，不是 `.gitignore`。**
-- 若你要讓某個目錄或路徑被 guardian 掃描忽略，必須更新 `ai-guardian.json` 的 `ignoreDirs` 陣列。
-- 只改 `.gitignore` 不夠——guardian 會在下次指令執行時自動把 `.gitignore` 的條目同步進來，
-  但若需要立即生效，請直接編輯 `ai-guardian.json`。
-- 格式：純目錄名（如 `"generated"`）或相對路徑前綴（如 `"src/proto-gen"`）皆可。
+### 1.5 忽略路徑管理定律（.gitignore 是唯一真理來源）
+- **Guardian 掃描走 git diff，自動尊重 `.gitignore`，不再讀任何 ai-guardian 自訂忽略清單。**
+- 要讓檔案不被掃描，加進 `.gitignore` 即可，不需動 ai-guardian 設定。
+- 舊版 `ai-guardian.json::ignoreDirs` 欄位已棄用、不再被讀取，可直接刪除。
 
 ### 2. 嚴禁打補丁 (Replace, Don't Patch)
 - **嚴禁**在既有函式中疊加 `if (isNew)` / `if (isLegacy)` 等兼容判斷。
