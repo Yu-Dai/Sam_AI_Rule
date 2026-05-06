@@ -22,7 +22,7 @@ $exitCode = 0
 
 try {
     # 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
-    if (-not ((Test-Path 'ai-guardian') -and (Test-Path 'ai-guardian\templates') -and (Test-Path 'templates'))) {
+    if (-not ((Test-Path 'ai-guardian') -and (Test-Path 'ai-guardian\templates'))) {
         $msg = @"
 此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $(Get-Location)）
 正確做法：
@@ -46,7 +46,7 @@ try {
         if (Test-Path (Join-Path $target 'PROJECT.md')) {
             Write-Host "[skip] $target\PROJECT.md 已存在" -ForegroundColor Yellow
         } else {
-            Copy-Item (Join-Path 'templates' 'PROJECT.md') (Join-Path $target 'PROJECT.md')
+            Copy-Item 'ai-guardian\templates\PROJECT.md' (Join-Path $target 'PROJECT.md')
             Write-Host "[ok] PROJECT.md → $target\（請填寫）" -ForegroundColor Green
         }
     }

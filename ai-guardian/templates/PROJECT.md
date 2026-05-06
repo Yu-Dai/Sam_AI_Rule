@@ -3,7 +3,7 @@
 > 這份檔案是 AI 與人類的「北極星」— 描述專案當下目標、方向、非目標、歷史轉向。
 > 任何重大決策或轉向發生時，**立刻更新**。過時的 PROJECT.md 比沒有還糟。
 >
-> 配合 `CLAUDE.md` §13 (Lifecycle Awareness) 與 §15 (Direction Alignment) 使用。
+> 配合 `AGENTS.md` §10 (Direction Alignment) 與 `.guardian/current-task.md` Q6 (Lifecycle Awareness) 使用。
 
 ---
 
@@ -21,7 +21,7 @@
 
 **是否有其他系統依賴此專案的介面？**：_無 / 有（列出：___）_
 
-> 以上三項直接決定 §13 是否需要保留 backward compat。全是「無」= 改就是改，不留兼容。
+> 以上三項直接決定 current-task.md Q6 是否需要保留 backward compat。全是「無」= 改就是改，不留兼容。
 
 ---
 

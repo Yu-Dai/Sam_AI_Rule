@@ -142,6 +142,16 @@ async function runFinish(projectRoot, options = {}) {
     console.log(`已成功將改動合併回 ${mainBranch} 並完成現場合理清理。`);
     console.log(`任務審核紀錄已存至: .guardian/archive/tasks/${archiveName}`);
 
+    // PROJECT.md 軟提醒（依 AGENTS.md §10 Direction Alignment）
+    // 任務完結是回頭評估「方向有沒有變」的最佳時機
+    const projectMdPath = path.join(projectRoot, 'PROJECT.md');
+    if (fs.existsSync(projectMdPath)) {
+      console.log(`\n🧭 PROJECT.md 校準提醒：`);
+      console.log(`   本次任務是否改變了專案方向 / 非目標 / 技術選型 / 階段？`);
+      console.log(`   若是 → 主動建議 user 更新 PROJECT.md（核心目標 / 當下方向 / 非目標 / 歷史轉向）`);
+      console.log(`   若否 → 略過此提醒`);
+    }
+
   } catch (err) {
     // 若 merge/checkout 失敗，嘗試還原 stash 避免用戶的改動卡在 stash 裡
     if (stashedBeforeMerge) {

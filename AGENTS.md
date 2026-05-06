@@ -146,7 +146,7 @@ Sam_AI_Rule 個人與專案規則的單一真理來源。所有 AI coding tool�
 - 第一次發生「策略轉向」或需求大幅變更
 - 發現你自己（Claude）開始往已被放棄的方向修改
 
-**沒有 `PROJECT.md` 時**：建議我建立，徵求同意後拉模板：`curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/templates/PROJECT.md -o PROJECT.md`，再跟我對談填寫。
+**沒有 `PROJECT.md` 時**：建議我建立，徵求同意後拉模板：`curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/ai-guardian/templates/PROJECT.md -o PROJECT.md`，再跟我對談填寫。
 
 **有 `PROJECT.md` 時**：
 - 每個 session 開頭讀一次，校準方向

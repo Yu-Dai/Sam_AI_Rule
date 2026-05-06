@@ -55,7 +55,7 @@ bash init-project.sh     # 或 .\init-project.ps1
 cd <project>
 git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
 cp Sam_AI_Rule/CLAUDE.md .
-cp Sam_AI_Rule/templates/PROJECT.md .   # 需要的話
+cp Sam_AI_Rule/ai-guardian/templates/PROJECT.md .   # 需要的話
 echo "/Sam_AI_Rule/" >> .gitignore       # 推薦
 ai-guardian adopt                        # 需要的話
 ```

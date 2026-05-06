@@ -26,7 +26,7 @@ _pause_on_exit() {
 trap _pause_on_exit EXIT
 
 # 前置檢查：必須在 Sam_AI_Rule clone 子目錄內執行
-if [ ! -d ai-guardian ] || [ ! -d ai-guardian/templates ] || [ ! -d templates ]; then
+if [ ! -d ai-guardian ] || [ ! -d ai-guardian/templates ]; then
   echo "[error] 此腳本須從 Sam_AI_Rule clone 子目錄內執行（PWD: $PWD）" >&2
   echo "        正確做法：" >&2
   echo "          cd <project>/Sam_AI_Rule" >&2
@@ -48,7 +48,7 @@ if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
   if [ -f "$TARGET/PROJECT.md" ]; then
     echo "[skip] $TARGET/PROJECT.md 已存在"
   else
-    cp templates/PROJECT.md "$TARGET/"
+    cp ai-guardian/templates/PROJECT.md "$TARGET/"
     echo "[ok] PROJECT.md → $TARGET/（請填寫）"
   fi
 fi

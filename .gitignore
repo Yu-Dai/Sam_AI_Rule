@@ -42,7 +42,7 @@ coverage/
 *.local.md
 
 # === 防呆：本 repo 根目錄不該有 PROJECT.md（PROJECT.md 是給下游專案用的，
-#    模板放在 templates/PROJECT.md。/PROJECT.md 只匹配根目錄，不影響子目錄） ===
+#    模板放在 ai-guardian/templates/PROJECT.md。/PROJECT.md 只匹配根目錄，不影響子目錄） ===
 /PROJECT.md
 /AGENTS.md
 /ai-guardian.json
