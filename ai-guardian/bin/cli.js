@@ -26,6 +26,26 @@ const { runStart } = require('../src/startCommand');
 const { runReview } = require('../src/reviewCommand');
 const { runFinish } = require('../src/finishCommand');
 const { runUninstall } = require('../src/uninstallCommand');
+const {
+  AGENTS_MD_MARKER,
+  CLAUDE_MD_MARKER,
+  detectFileState,
+} = require('../src/utils/conflictResolver');
+
+// IDE 編號 → key 的對照（順序也用於 askIDE 顯示）
+const IDE_NUM_TO_KEY = { '1': 'cursor', '2': 'windsurf', '3': 'roo', '4': 'claude', '5': 'antigravity' };
+const IDE_VALID_KEYS = new Set(Object.values(IDE_NUM_TO_KEY));
+const VALID_CONFLICT_DECISIONS = new Set(['skip', 'overwrite', 'insert-import']);
+
+function parseIdesAnswer(answer) {
+  if (!answer || !answer.trim()) return [];
+  const selected = [];
+  answer.split(',').map(s => s.trim()).forEach(ch => {
+    if (IDE_NUM_TO_KEY[ch]) selected.push(IDE_NUM_TO_KEY[ch]);
+    else if (IDE_VALID_KEYS.has(ch.toLowerCase())) selected.push(ch.toLowerCase());
+  });
+  return [...new Set(selected)]; // dedup
+}
 
 // process.argv: [node, script, command, ...args]
 const COMMAND_ARG_INDEX = 2;
@@ -35,77 +55,7 @@ const command = process.argv[COMMAND_ARG_INDEX];
 
 async function main() {
   if (command === 'init' || command === 'adopt') {
-    const isAdoptCmd = command === 'adopt';
-    const idesArg = process.argv.find(arg => arg.startsWith('--ides='));
-    const modeArg = process.argv.find(arg => arg.startsWith('--mode='));
-
-    if (idesArg) {
-      const idesList = idesArg.split('=')[1].split(',').map(s => s.trim());
-      const selected = [];
-      idesList.forEach(ch => {
-        if (ch === '1' || ch.toLowerCase() === 'cursor') selected.push('cursor');
-        if (ch === '2' || ch.toLowerCase() === 'windsurf') selected.push('windsurf');
-        if (ch === '3' || ch.toLowerCase() === 'roo') selected.push('roo');
-        if (ch === '4' || ch.toLowerCase() === 'claude') selected.push('claude');
-        if (ch === '5' || ch.toLowerCase() === 'antigravity') selected.push('antigravity');
-      });
-      if (selected.length === 0) selected.push('antigravity');
-      const isAdopt = isAdoptCmd ? true : (modeArg ? modeArg.split('=')[1] !== 'standard' : true);
-      const createProjectMd = process.argv.includes('--project-md');
-      initProject(process.cwd(), selected, isAdopt, { createProjectMd });
-      process.exit(0);
-    }
-
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-    if (!isAdoptCmd) {
-      console.log('\nai-guardian init — 選擇專案狀態：');
-      console.log('  1. 全新專案（建立 src/production / lab / archive 隔離結構）');
-      console.log('  2. 既有專案（無痛掛載：保留現有結構，建立 .guardian 沙盒）[預設]');
-
-      rl.question('您的選項 (預設為 2): ', (modeAnswer) => {
-        const isAdopt = modeAnswer.trim() !== '1';
-        askIDE(rl, isAdopt);
-      });
-    } else {
-      console.log('\nai-guardian adopt — 中途接管，重新掛載 git hook 與 IDE rules（不動其他專案結構）');
-      askIDE(rl, true);
-    }
-
-    function askIDE(rl, isAdopt) {
-      console.log('\n本機 IDE（可多選，逗號分隔，例如 1,5）：');
-      console.log('  1. cursor       (.cursor/rules + skills)');
-      console.log('  2. windsurf     (.windsurfrules)');
-      console.log('  3. roo          (.roo/rules + skills)');
-      console.log('  4. claude       (.claude/rules + skills)');
-      console.log('  5. antigravity  (.agents/rules + skills) [預設]');
-
-      rl.question('您的選擇 (預設為 5): ', (answer) => {
-        const selected = [];
-        if (!answer.trim()) {
-          selected.push('antigravity');
-        } else {
-          answer.split(',').map(s => s.trim()).forEach(ch => {
-            if (ch === '1') selected.push('cursor');
-            if (ch === '2') selected.push('windsurf');
-            if (ch === '3') selected.push('roo');
-            if (ch === '4') selected.push('claude');
-            if (ch === '5') selected.push('antigravity');
-          });
-          if (selected.length === 0) selected.push('antigravity');
-        }
-        // 接著問是否建立 PROJECT.md（取代舊版 init-project.sh 那一步）
-        rl.question('是否建立 PROJECT.md（長期專案方向追蹤檔）？(y/N): ', (projectAns) => {
-          const a = projectAns.trim().toLowerCase();
-          const createProjectMd = a === 'y' || a === 'yes';
-          initProject(process.cwd(), selected, isAdopt, { createProjectMd });
-          rl.close();
-          // 顯式 process.exit：readline 在 Windows Git Bash 上 close 後仍可能持有 stdin handle，
-          // 導致 Node event loop 不退、父 shell 卡死要 user Ctrl+C → exit 130
-          process.exit(0);
-        });
-      });
-    }
+    await runInitOrAdopt(command === 'adopt');
 
   } else if (command === 'start') {
     const args = process.argv.slice(FIRST_TASK_ARG_INDEX);
@@ -194,6 +144,157 @@ uninstall:
   ai-guardian uninstall --full 移除所有 guardian 設定檔與目錄
     `);
   }
+}
+
+/**
+ * init / adopt 主流程：
+ * - 非互動（--ides=...）：直接執行，--on-conflict 控制衝突處理
+ * - 互動：依序問 mode（init only）→ IDE（強制選擇）→ PROJECT.md → 衝突 prompt
+ */
+async function runInitOrAdopt(isAdoptCmd) {
+  const idesArg = process.argv.find(arg => arg.startsWith('--ides='));
+  const modeArg = process.argv.find(arg => arg.startsWith('--mode='));
+  const onConflictArg = process.argv.find(arg => arg.startsWith('--on-conflict='));
+
+  // ===== 非互動：--ides= 旗標 =====
+  if (idesArg) {
+    const selected = parseIdesAnswer(idesArg.split('=')[1]);
+    if (selected.length === 0) {
+      console.error('[err] --ides= 需要至少一個 IDE。可用：cursor / windsurf / roo / claude / antigravity（或 1-5）');
+      process.exit(1);
+    }
+    const isAdopt = isAdoptCmd ? true : (modeArg ? modeArg.split('=')[1] !== 'standard' : true);
+    const createProjectMd = process.argv.includes('--project-md');
+
+    const onConflict = onConflictArg ? onConflictArg.split('=')[1] : 'skip';
+    if (!VALID_CONFLICT_DECISIONS.has(onConflict)) {
+      console.error(`[err] --on-conflict 必須是 ${[...VALID_CONFLICT_DECISIONS].join(' / ')} 之一`);
+      process.exit(1);
+    }
+    const conflictDecisions = buildNonInteractiveConflictDecisions(process.cwd(), onConflict);
+    initProject(process.cwd(), selected, isAdopt, { createProjectMd, conflictDecisions });
+    process.exit(0);
+  }
+
+  // ===== 互動模式 =====
+  // 自己維護 line queue + waiter 隊列。原因：rl.question() 在 piped stdin 上有 race —
+  // 當多個 line event 接連到達、但兩次 question() 之間有空檔時，line event 會被丟掉
+  // （因為 question 的 once-listener 還沒註冊上）。手動 queue 確保 every line 都被消費。
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false });
+  const lineQueue = [];
+  const waiterQueue = [];
+  rl.on('line', line => {
+    if (waiterQueue.length > 0) waiterQueue.shift()(line);
+    else lineQueue.push(line);
+  });
+  const ask = prompt => new Promise(resolve => {
+    process.stdout.write(prompt);
+    if (lineQueue.length > 0) resolve(lineQueue.shift());
+    else waiterQueue.push(resolve);
+  });
+
+  try {
+    let isAdopt;
+    if (!isAdoptCmd) {
+      console.log('\nai-guardian init — 選擇專案狀態：');
+      console.log('  1. 全新專案（建立 src/production / lab / archive 隔離結構）');
+      console.log('  2. 既有專案（無痛掛載：保留現有結構，建立 .guardian 沙盒）[預設]');
+      const modeAns = await ask('您的選項 (預設為 2): ');
+      isAdopt = modeAns.trim() !== '1';
+    } else {
+      console.log('\nai-guardian adopt — 中途接管，重新掛載 git hook 與 IDE rules（不動其他專案結構）');
+      isAdopt = true;
+    }
+
+    const selected = await askIDEInteractive(ask);
+
+    const projectAns = await ask('是否建立 PROJECT.md（長期專案方向追蹤檔）？(y/N): ');
+    const projectLower = projectAns.trim().toLowerCase();
+    const createProjectMd = projectLower === 'y' || projectLower === 'yes';
+
+    const conflictDecisions = await scanAndPromptConflicts(ask, process.cwd());
+
+    initProject(process.cwd(), selected, isAdopt, { createProjectMd, conflictDecisions });
+  } finally {
+    rl.close();
+    // 顯式 process.exit：readline 在 Windows Git Bash 上 close 後仍可能持有 stdin handle
+    process.exit(0);
+  }
+}
+
+async function askIDEInteractive(ask) {
+  console.log('\n本機 IDE（可多選，逗號分隔，例如 1,5）：');
+  console.log('  1. cursor       (.cursor/rules + skills)');
+  console.log('  2. windsurf     (.windsurfrules)');
+  console.log('  3. roo          (.roo/rules + skills)');
+  console.log('  4. claude       (.claude/rules + skills)');
+  console.log('  5. antigravity  (.agents/rules + skills)');
+
+  while (true) {
+    const answer = await ask('您的選擇（必填，至少一個）: ');
+    const selected = parseIdesAnswer(answer);
+    if (selected.length > 0) return selected;
+    console.log('  [err] 必須選至少一個。輸入 1-5（多選用逗號分隔），例如 1,5');
+  }
+}
+
+async function scanAndPromptConflicts(ask, cwd) {
+  const decisions = {};
+  const agentsState = detectFileState(path.join(cwd, 'AGENTS.md'), AGENTS_MD_MARKER);
+  if (agentsState === 'custom') {
+    decisions.AGENTS_MD = await promptAgentsConflict(ask);
+  }
+  const claudeState = detectFileState(path.join(cwd, 'CLAUDE.md'), CLAUDE_MD_MARKER);
+  if (claudeState === 'custom') {
+    decisions.CLAUDE_MD = await promptClaudeConflict(ask);
+  }
+  return decisions;
+}
+
+async function promptAgentsConflict(ask) {
+  console.log('');
+  console.log('[!] 這個專案已經有 AGENTS.md，但 ai-guardian 沒辦法判斷它是自己之前產生的、還是你手寫的。');
+  console.log('    若直接 skip 不動它，guardian 規則不會被 IDE / AI 載入。');
+  console.log('');
+  console.log('    [s] skip      — 保留你的版本，guardian 規則不生效（之後你自己處理）');
+  console.log('    [o] overwrite — 用 guardian template 覆寫（舊版備份到 AGENTS.md.bak.<timestamp>）');
+  console.log('');
+  while (true) {
+    const ans = (await ask('選擇 [s/o]（必填）: ')).trim().toLowerCase();
+    if (ans === 's' || ans === 'skip') return 'skip';
+    if (ans === 'o' || ans === 'overwrite') return 'overwrite';
+    console.log('  [err] 請輸入 s 或 o');
+  }
+}
+
+async function promptClaudeConflict(ask) {
+  console.log('');
+  console.log('[!] 這個專案已經有 CLAUDE.md，但 ai-guardian 沒辦法判斷它是自己之前產生的、還是你手寫的。');
+  console.log('    若直接 skip 不動它，Claude Code 不會自動載入 AGENTS.md → guardian 規則對 Claude Code 失效。');
+  console.log('');
+  console.log('    [s] skip          — 保留你的版本（Claude Code 不會載入 guardian 規則）');
+  console.log('    [o] overwrite     — 用 stub 覆寫（舊版備份到 CLAUDE.md.bak.<timestamp>）');
+  console.log('    [i] insert-import — 在你的 CLAUDE.md 頂端加一行 @AGENTS.md（保留你所有內容 + 載入 guardian 規則）');
+  console.log('');
+  while (true) {
+    const ans = (await ask('選擇 [s/o/i] (預設 i): ')).trim().toLowerCase();
+    if (ans === '' || ans === 'i' || ans === 'insert-import') return 'insert-import';
+    if (ans === 's' || ans === 'skip') return 'skip';
+    if (ans === 'o' || ans === 'overwrite') return 'overwrite';
+    console.log('  [err] 請輸入 s / o / i');
+  }
+}
+
+function buildNonInteractiveConflictDecisions(cwd, onConflict) {
+  const decisions = {};
+  if (detectFileState(path.join(cwd, 'AGENTS.md'), AGENTS_MD_MARKER) === 'custom') {
+    // insert-import 對 AGENTS.md 沒意義（規則需完整 body，不是 import），fallback 為 skip
+    decisions.AGENTS_MD = onConflict === 'insert-import' ? 'skip' : onConflict;
+  }
+  if (detectFileState(path.join(cwd, 'CLAUDE.md'), CLAUDE_MD_MARKER) === 'custom') {
+    decisions.CLAUDE_MD = onConflict;
+  }
+  return decisions;
 }
 
 main().catch(err => {
