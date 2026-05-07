@@ -72,7 +72,8 @@ function writeAutoGenIfPossible(filePath, marker, content) {
   return { written: false };
 }
 
-function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
+function initProject(targetDir, ides = ['antigravity'], isAdopt = true, options = {}) {
+  const { createProjectMd = false } = options;
   // 追蹤本次 init 寫入的所有檔案，最後統一 commit（確保 working tree 乾淨）
   const writtenFiles = [];
   // 1. 設定防護配置與資料夾結構
@@ -187,6 +188,20 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
     console.log('[' + (claudeResult.action === '建立' ? 'create' : 'update') + '] CLAUDE.md (stub → @AGENTS.md)');
   } else {
     console.log('[skip] CLAUDE.md 已客製化（無 stub marker）');
+  }
+
+  // 4c. 可選：建立 PROJECT.md（user 在 cli prompt 同意時觸發）
+  //     PROJECT.md 性質跟 AGENTS.md / CLAUDE.md 不同 — 是給人填的方向追蹤檔，
+  //     一旦建立就由 user 接管，init 之後不再覆寫。所以這裡只判斷 exists 跳過，不用 marker 機制。
+  if (createProjectMd) {
+    const projectMdPath = path.join(targetDir, 'PROJECT.md');
+    if (fs.existsSync(projectMdPath)) {
+      console.log('[skip] PROJECT.md 已存在');
+    } else {
+      fs.writeFileSync(projectMdPath, loadTemplate('PROJECT.md'), 'utf-8');
+      writtenFiles.push('PROJECT.md');
+      console.log('[create] PROJECT.md（請填寫專案方向）');
+    }
   }
 
   // 5. 確保有 .git 資料夾（沒有就 init 一個，否則後續 hook 與 auto-commit 都會失敗）

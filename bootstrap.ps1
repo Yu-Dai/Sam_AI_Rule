@@ -99,14 +99,16 @@ try {
 
     Write-Host ""
     if ($linkExitCode -eq 0) {
-        Write-Host "✅ 完成！全域 'ai-guardian' 指令已註冊。" -ForegroundColor Green
+        Write-Host "[ok] 全域 'ai-guardian' 指令已註冊" -ForegroundColor Green
+        Write-Host "     canonical: $canonicalDir" -ForegroundColor Gray
+        Write-Host "     之後從任何 Sam_AI_Rule clone 重跑 bootstrap 都會覆寫此處" -ForegroundColor Gray
         Write-Host ""
-        Write-Host "  Source of truth: $canonicalDir" -ForegroundColor Gray
-        Write-Host "  （之後從任何 Sam_AI_Rule clone 跑 bootstrap 都會覆寫此處）" -ForegroundColor Gray
+        Write-Host "下一步：cd 到任何想啟用 guardian 的專案，跑：" -ForegroundColor Yellow
+        Write-Host "  ai-guardian adopt    # 既有專案，無痛掛載" -ForegroundColor Gray
+        Write-Host "  ai-guardian init     # 全新專案，建立 src/production / lab / archive 隔離結構" -ForegroundColor Gray
         Write-Host ""
-        Write-Host "下一步：在這個 Sam_AI_Rule clone 內執行 init-project.ps1 部署到專案" -ForegroundColor Yellow
-        Write-Host "  cd .." -ForegroundColor Gray
-        Write-Host "  & .\Sam_AI_Rule\init-project.ps1" -ForegroundColor Gray
+        Write-Host "init / adopt 會互動式問：IDE 多選 + 是否建立 PROJECT.md。" -ForegroundColor Gray
+        Write-Host "需要時自己決定是否把這個 Sam_AI_Rule clone 路徑加入該專案的 .gitignore。" -ForegroundColor Gray
         Write-Host ""
         Write-Host "[Dev 場景] 編輯 source clone 的 .js / .md 後，跑 'ai-guardian self-update'" -ForegroundColor DarkGray
         Write-Host "          即可同步到 canonical（不需重跑 bootstrap）" -ForegroundColor DarkGray

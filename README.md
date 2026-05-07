@@ -1,6 +1,6 @@
 # Sam AI Rule
 
-個人 AI 助手規則 + 程式碼守衛工具包。**每個專案 clone 一份**，把規則與守衛部署到專案根目錄。
+個人 AI 助手規則 + 程式碼守衛工具包。**clone 一次到任何地方** → bootstrap → 之後任何專案直接 `ai-guardian init/adopt` 部署。
 
 ## 內容
 
@@ -11,13 +11,15 @@
 | 專案方向追蹤 | [`ai-guardian/templates/PROJECT.md`](ai-guardian/templates/PROJECT.md) | 長期專案的目標 / 非目標 / 歷史轉向北極星（給人類填寫） |
 | 程式碼守衛 CLI | [`ai-guardian/`](ai-guardian/) | AST-level commit 阻擋與任務流程管理 |
 
-**設計理念**：AGENTS.md（軟）負責 prompt 階段勸說 AI；ai-guardian CLI（硬）負責 commit 階段實際阻擋。兩者互補。CLAUDE.md 在新版只是個 1-行 stub 指向 AGENTS.md（為了 Claude Code 與人類瀏覽者的方便）。
+**設計理念**：AGENTS.md（軟）負責 prompt 階段勸說 AI；ai-guardian CLI（硬）負責 commit 階段實際阻擋。兩者互補。CLAUDE.md 在新版只是個 stub，用 Claude Code 原生 `@AGENTS.md` import 語法把 AGENTS.md 拉進 context。
 
 ---
 
 ## 使用流程
 
-### 一次性（每台新機器跑一次）：安裝 ai-guardian 為全域指令
+兩步：bootstrap 一次性，之後任何專案直接 `ai-guardian init/adopt`。
+
+### Step 1（每台機器跑一次）：bootstrap
 
 任意挑一個目錄 clone Sam_AI_Rule，跑 bootstrap：
 
@@ -41,63 +43,66 @@ bootstrap 做的事：**把 `ai-guardian/` source 複製到 canonical 路徑 →
 - 重跑 bootstrap = 覆寫 canonical，永遠可預期目標
 - 想升級就在任一 clone `git pull` 後重跑 bootstrap
 
-**Dev 場景**（編輯 ai-guardian 本身的 source）：
-- 改完 `.js` / `.md` 後 → 跑 `ai-guardian self-update` 把 src/bin/templates 增量同步到 canonical
-- 不必每次重跑完整 bootstrap（不需 npm install）
+bootstrap 完成後，你**不再需要保留** Sam_AI_Rule clone 在任何專案旁邊。clone 只是 source，bootstrap 後可以丟到任何位置或刪掉（但保留以便未來升級會比較方便）。
 
-### 每個新專案：clone Sam_AI_Rule 並初始化
+### Step 2（每個專案）：直接跑 ai-guardian
 
 ```bash
-cd <project>
-git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
-cd Sam_AI_Rule
-bash init-project.sh     # 或 .\init-project.ps1
+cd <my-project>
+ai-guardian adopt        # 既有專案，無痛掛載（不動既有結構）
+# 或
+ai-guardian init         # 全新專案，建立 src/production / lab / archive 隔離結構
 ```
 
-`init-project` 會在 **parent 目錄（你的專案根目錄）** 互動式做以下事：
-1. 詢問是否複製 `PROJECT.md` 模板（給人類填的方向追蹤檔）
-2. 詢問是否把 `Sam_AI_Rule/` 加到專案的 `.gitignore`（推薦，因為這是 vendored 工具）
-3. 詢問是否在專案根目錄掛載 ai-guardian（執行 `ai-guardian adopt`）
+兩個指令都會互動式問：
+1. **本機 IDE**（多選，例如 `1,5` 同時設定 Cursor + Antigravity）
+2. **是否建立 PROJECT.md**（長期方向追蹤檔，給人填）
 
-執行 `ai-guardian adopt` 後，你的專案根目錄會出現：
-- `AGENTS.md` — 規則本體（規則的 SSoT，所有 IDE 都讀），帶 auto-gen marker，重跑 init/adopt 可安全更新
-- `CLAUDE.md` — 1-行 stub，內容只有「See AGENTS.md」，給 Claude Code 與人類瀏覽者
+執行完，專案根目錄會出現：
+- `AGENTS.md` — 規則本體（auto-gen marker，重跑 init/adopt 可安全更新）
+- `CLAUDE.md` — Claude Code stub（用 `@AGENTS.md` 把規則拉進 context）
 - `.guardian/` — 沙盒目錄與任務狀態
-- `.{ide}/rules/` — 各 IDE 的 rule 檔，內容是指向 AGENTS.md 的 reference stub
+- `.{ide}/rules/` — 各 IDE 的 rule 檔（指向 AGENTS.md 的 reference stub）
+- `.{ide}/skills/adversarial-debate/SKILL.md` — 對 Claude Code / Antigravity 寫，其他 IDE 跳過
 - `.git/hooks/pre-commit` — guardian 攔截 hook
-
-`PROJECT.md` 與 IDE 的 skill 檔（如 `.claude/skills/adversarial-debate/`）為選擇性產生。
+- `PROJECT.md`（選擇性，按你回答）
 
 ---
 
-## 不想用 init-project 腳本？純手動也可以
+## 純手動部署（不用 bootstrap，自己處理 ai-guardian 安裝）
 
 ```bash
 cd <project>
-git clone https://github.com/Yu-Dai/Sam_AI_Rule.git
-echo "/Sam_AI_Rule/" >> .gitignore       # 推薦
-ai-guardian adopt                        # 寫 AGENTS.md / CLAUDE.md stub / hook
-cp Sam_AI_Rule/ai-guardian/templates/PROJECT.md .   # 需要的話
+ai-guardian adopt        # 假設你已用其他方式裝好 ai-guardian CLI
 ```
 
-不用手動 `cp AGENTS.md` 或 `cp CLAUDE.md` — `ai-guardian adopt` 會從 template 渲染並寫入。
-
-或者完全不 clone，只想要規則本體單檔（不裝 CLI）：
+或者完全不裝 CLI、只想要規則本體單檔：
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Yu-Dai/Sam_AI_Rule/main/ai-guardian/templates/AGENTS.md -o AGENTS.md
 ```
 
 ---
 
-## 升級 Sam_AI_Rule 在某個專案
+## 升級
 
+機器級升級（在任意一個 Sam_AI_Rule clone 內）：
 ```bash
-cd <project>/Sam_AI_Rule
+cd <Sam_AI_Rule clone>
 git pull
-ai-guardian adopt        # 重跑 adopt，AGENTS.md / CLAUDE.md 會被重新渲染（auto-gen marker 仍在 → 安全覆寫）
+bash bootstrap.sh        # 覆寫 canonical，所有專案下次跑 ai-guardian 自動拿到新版
+```
+
+專案級重新套用規則：
+```bash
+cd <project>
+ai-guardian adopt        # AGENTS.md / CLAUDE.md 帶 auto-gen marker → 安全覆寫
 ```
 
 若你曾把 AGENTS.md 客製化（移除第一行的 `— AI Guardian Project Rules` 後綴 = 標記為使用者版本），adopt 不會覆寫你的客製版本。
+
+**Dev 場景**（你正在編輯 ai-guardian 本身的 source）：
+- 改完 `.js` / `.md` 後 → 跑 `ai-guardian self-update` 增量同步到 canonical
+- 不必每次重跑完整 bootstrap（省 npm install）
 
 ---
 
@@ -117,6 +122,6 @@ ai-guardian finish               # 任務完結：合併主線 + 歸檔
 
 ## 維護
 
-任何元件變更 → commit → push 到 `main`。下次 clone 自動拿到最新版。
+任何元件變更 → commit → push 到 `main`。下次 clone 重新 bootstrap 自動拿到最新版。
 
 本 repo 只放**跨專案共通**的東西。個別專案的設定請放在那個專案內。

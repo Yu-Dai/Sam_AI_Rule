@@ -51,7 +51,8 @@ async function main() {
       });
       if (selected.length === 0) selected.push('antigravity');
       const isAdopt = isAdoptCmd ? true : (modeArg ? modeArg.split('=')[1] !== 'standard' : true);
-      initProject(process.cwd(), selected, isAdopt);
+      const createProjectMd = process.argv.includes('--project-md');
+      initProject(process.cwd(), selected, isAdopt, { createProjectMd });
       process.exit(0);
     }
 
@@ -93,11 +94,16 @@ async function main() {
           });
           if (selected.length === 0) selected.push('antigravity');
         }
-        initProject(process.cwd(), selected, isAdopt);
-        rl.close();
-        // 顯式 process.exit：readline 在 Windows Git Bash 上 close 後仍可能持有 stdin handle，
-        // 導致 Node event loop 不退、父 shell（例如 init-project.sh）卡死要 user Ctrl+C → exit 130
-        process.exit(0);
+        // 接著問是否建立 PROJECT.md（取代舊版 init-project.sh 那一步）
+        rl.question('是否建立 PROJECT.md（長期專案方向追蹤檔）？(y/N): ', (projectAns) => {
+          const a = projectAns.trim().toLowerCase();
+          const createProjectMd = a === 'y' || a === 'yes';
+          initProject(process.cwd(), selected, isAdopt, { createProjectMd });
+          rl.close();
+          // 顯式 process.exit：readline 在 Windows Git Bash 上 close 後仍可能持有 stdin handle，
+          // 導致 Node event loop 不退、父 shell 卡死要 user Ctrl+C → exit 130
+          process.exit(0);
+        });
       });
     }
 
