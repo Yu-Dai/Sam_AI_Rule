@@ -1,23 +1,31 @@
 'use strict';
 
 /**
- * selfUpdateCommand — 把當前 source repo 的 src/ + bin/ 同步到全域安裝
+ * selfUpdateCommand — 把當前 source clone 的 src/ + bin/ + templates/ 同步到 canonical install
  *
- * 場景：開發 ai-guardian 自己時，npm install -g . 在 Windows 常 EBUSY 失敗，
- *      手動 cp 一堆檔案費時又容易漏。本指令自動化這個流程。
+ * 場景：開發 ai-guardian 自己時，編輯 source clone 後不想跑完整 bootstrap（耗時且
+ *      會 npm install）。本指令做輕量增量同步：把 .js + .md 檔案 copy 到 canonical。
+ *
+ * 路徑解析：透過 `npm root -g` + 'ai-guardian' 找到 global node_modules 內的 ai-guardian。
+ *           bootstrap 之後它是 symlink → canonical (~/.ai-guardian or %LOCALAPPDATA%\ai-guardian)，
+ *           所以寫進這個路徑等同寫進 canonical。
  *
  * 限制：
- *   - 必須在 ai-guardian source repo 根目錄執行（package.json::name === 'ai-guardian'）
- *   - 全域必須先裝過一次（npm install -g . 至少一次）
- *   - v1 只同步、不刪除全域 orphan（要全清請手動 npm uninstall -g + install -g）
+ *   - 必須在 ai-guardian source clone 內執行（package.json::name === 'ai-guardian'）
+ *   - canonical 必須先裝過一次（執行過 bootstrap.sh / .ps1）
+ *   - 不刪除 canonical orphan（要全清請重跑 bootstrap）
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const SYNC_DIRS = ['src', 'bin'];
-const SYNC_EXTS = new Set(['.js']);
+// 每個目錄各自的副檔名 filter（src/bin 是 .js；templates 是 .md）
+const SYNC_DIRS_WITH_EXTS = [
+  { dir: 'src', exts: new Set(['.js']) },
+  { dir: 'bin', exts: new Set(['.js']) },
+  { dir: 'templates', exts: new Set(['.md']) },
+];
 const RETRY_DELAY_MS = 200;
 
 function isAiGuardianRepo(cwd) {
@@ -41,7 +49,8 @@ function findGlobalInstallPath() {
   return path.join(globalRoot, 'ai-guardian');
 }
 
-function* walkJsFiles(absDir, relDir) {
+// 走訪 dir 下所有檔案，回傳符合 exts 的（其他副檔名忽略）
+function* walkFiles(absDir, relDir, exts) {
   if (!fs.existsSync(absDir)) return;
   for (const name of fs.readdirSync(absDir)) {
     const absPath = path.join(absDir, name);
@@ -49,8 +58,8 @@ function* walkJsFiles(absDir, relDir) {
     let stat;
     try { stat = fs.statSync(absPath); } catch { continue; }
     if (stat.isDirectory()) {
-      yield* walkJsFiles(absPath, relPath);
-    } else if (SYNC_EXTS.has(path.extname(name))) {
+      yield* walkFiles(absPath, relPath, exts);
+    } else if (exts.has(path.extname(name))) {
       yield { absPath, relPath };
     }
   }
@@ -89,8 +98,9 @@ function runSelfUpdate(cwd) {
   }
 
   if (!fs.existsSync(globalAiGuardian)) {
-    console.error('❌ 全域尚未安裝 ai-guardian。');
-    console.error('   首次安裝請用：cd ' + cwd + ' && npm install -g .');
+    console.error('❌ Canonical 尚未安裝 ai-guardian。');
+    console.error('   首次安裝請從 Sam_AI_Rule clone 跑 bootstrap：');
+    console.error('   cd <Sam_AI_Rule clone> && bash bootstrap.sh   # 或 .\\bootstrap.ps1');
     process.exit(1);
   }
 
@@ -98,9 +108,9 @@ function runSelfUpdate(cwd) {
   let failed = 0;
   const failures = [];
 
-  for (const dir of SYNC_DIRS) {
+  for (const { dir, exts } of SYNC_DIRS_WITH_EXTS) {
     const localDir = path.join(cwd, dir);
-    for (const { absPath, relPath } of walkJsFiles(localDir, dir)) {
+    for (const { absPath, relPath } of walkFiles(localDir, dir, exts)) {
       const dstPath = path.join(globalAiGuardian, relPath);
       try {
         copyWithRetry(absPath, dstPath);
@@ -112,14 +122,13 @@ function runSelfUpdate(cwd) {
     }
   }
 
-  console.log(`✅ 已同步 ${synced} 個檔案到全域：${globalAiGuardian}`);
+  console.log(`✅ 已同步 ${synced} 個檔案到 canonical：${globalAiGuardian}`);
   if (failed > 0) {
     console.error(`❌ ${failed} 個檔案同步失敗：`);
     failures.forEach(({ relPath, err }) => console.error(`   ${relPath}: ${err}`));
     process.exit(1);
   }
-  console.log('   提示：v1 不刪除全域 orphan。若要徹底清乾淨，請：');
-  console.log('         npm uninstall -g ai-guardian && cd ' + cwd + ' && npm install -g .');
+  console.log('   提示：本指令只增量同步、不刪除 canonical orphan。要徹底重置請重跑 bootstrap。');
 }
 
 module.exports = { runSelfUpdate };

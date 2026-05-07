@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap.sh — 在 Sam_AI_Rule clone 子目錄內執行，安裝 ai-guardian 為全域指令
+# bootstrap.sh — 把 ai-guardian source 安裝到 canonical 路徑並全域註冊
 #
 # 用法：
 #   cd <project>
@@ -8,13 +8,16 @@
 #   bash bootstrap.sh
 #
 # 行為：
-#   1. 進入 ai-guardian 子目錄
-#   2. npm install + npm link（每台機器跑一次即可，全域註冊 ai-guardian 指令）
-#   3. 不複製規則檔（用 init-project.sh 做）
+#   1. 偵測 canonical 路徑（Linux/Mac: ~/.ai-guardian；Windows: $LOCALAPPDATA/ai-guardian）
+#   2. 把 ai-guardian/ 複製到 canonical（覆寫，但保留 canonical 自己的 node_modules 加速）
+#   3. cd canonical → npm install → npm link
+#   4. 全域 ai-guardian 指令永遠指向 canonical（不指向 clone）
+#
+# 環境變數：
+#   AI_GUARDIAN_CANONICAL_DIR — 覆寫 canonical 路徑（除錯 / 自訂用）
 
 set -e
 
-# 雙擊啟動時，避免視窗在腳本結束（成功或失敗）後立刻關掉看不到訊息
 _pause_on_exit() {
   local code=$?
   echo ""
@@ -36,25 +39,77 @@ if [ ! -d ai-guardian ] || [ ! -d ai-guardian/templates ]; then
   exit 1
 fi
 
-# 前置檢查：npm 必須存在
 if ! command -v npm >/dev/null 2>&1; then
   echo "[error] 缺少 npm，請先安裝 Node.js（建議 LTS）：https://nodejs.org/" >&2
   exit 1
 fi
 
-cd ai-guardian
+# 偵測平台
+case "$(uname)" in
+  *CYGWIN*|*MINGW*|*MSYS*) PLATFORM="windows" ;;
+  Darwin) PLATFORM="mac" ;;
+  *) PLATFORM="linux" ;;
+esac
 
-echo "[ai-guardian] 安裝依賴..."
+# 決定 canonical 路徑（環境變數優先）
+if [ -n "$AI_GUARDIAN_CANONICAL_DIR" ]; then
+  CANONICAL_DIR="$AI_GUARDIAN_CANONICAL_DIR"
+elif [ "$PLATFORM" = "windows" ] && [ -n "$LOCALAPPDATA" ]; then
+  if command -v cygpath >/dev/null 2>&1; then
+    CANONICAL_DIR="$(cygpath -u "$LOCALAPPDATA")/ai-guardian"
+  else
+    CANONICAL_DIR="$LOCALAPPDATA/ai-guardian"
+  fi
+else
+  CANONICAL_DIR="$HOME/.ai-guardian"
+fi
+
+SOURCE_DIR="$(pwd)/ai-guardian"
+
+echo "[ai-guardian] Source 來源:    $SOURCE_DIR"
+echo "[ai-guardian] Canonical 路徑: $CANONICAL_DIR"
+
+# 邊界：source 已經是 canonical（從 canonical 自身重跑 bootstrap）
+SOURCE_REAL="$(cd "$SOURCE_DIR" 2>/dev/null && pwd -P || echo "$SOURCE_DIR")"
+CANONICAL_REAL="$(cd "$CANONICAL_DIR" 2>/dev/null && pwd -P || echo "$CANONICAL_DIR")"
+
+if [ "$SOURCE_REAL" = "$CANONICAL_REAL" ]; then
+  echo "[ai-guardian] Source 已是 canonical，跳過複製，直接 install + link"
+else
+  echo "[ai-guardian] 複製 source 到 canonical（覆寫）..."
+  mkdir -p "$CANONICAL_DIR"
+  if command -v rsync >/dev/null 2>&1; then
+    # rsync --delete 確保 canonical 跟 source 一致；exclude node_modules 保留
+    # canonical 自己已下載的依賴（避免每次 bootstrap 重新 npm install 浪費時間）
+    rsync -a --delete --exclude='node_modules' "$SOURCE_DIR/" "$CANONICAL_DIR/"
+  else
+    # Fallback：手動清空後 cp -r，保留 node_modules
+    find "$CANONICAL_DIR" -mindepth 1 -maxdepth 1 ! -name 'node_modules' -exec rm -rf {} +
+    # cp -r 包含隱藏檔（.gitignore 等）
+    shopt -s dotglob 2>/dev/null || true
+    for item in "$SOURCE_DIR"/*; do
+      [ -e "$item" ] || continue
+      name=$(basename "$item")
+      [ "$name" = "node_modules" ] && continue
+      cp -r "$item" "$CANONICAL_DIR/"
+    done
+    shopt -u dotglob 2>/dev/null || true
+  fi
+fi
+
+cd "$CANONICAL_DIR"
+
+echo "[ai-guardian] 安裝依賴（in canonical）..."
 npm install
 if [ $? -ne 0 ]; then
   echo "[error] npm install 失敗，請檢查網路或 npm 設定後重試。" >&2
   exit 1
 fi
 
-echo "[ai-guardian] 清理可能的 stale link（避免 wrapper 沒被重建）..."
+echo "[ai-guardian] 清理可能的 stale link..."
 npm uninstall -g ai-guardian 2>/dev/null || true
 
-echo "[ai-guardian] 嘗試 npm link 註冊全域指令..."
+echo "[ai-guardian] 註冊全域指令（npm link）..."
 set +e
 npm link
 LINK_EXIT=$?
@@ -62,22 +117,20 @@ set -e
 
 echo
 if [ "$LINK_EXIT" -eq 0 ]; then
-  echo "完成！全域指令 'ai-guardian' 已註冊（每台機器跑一次即可）。"
+  echo "✅ 完成！全域 'ai-guardian' 指令已註冊。"
   echo
-  echo "下一步：在這個 Sam_AI_Rule clone 內執行 init-project.sh"
-  echo "把規則檔複製到專案根目錄："
+  echo "  Source of truth: $CANONICAL_DIR"
+  echo "  （之後從任何 Sam_AI_Rule clone 跑 bootstrap 都會覆寫此處）"
+  echo
+  echo "下一步：在這個 Sam_AI_Rule clone 內執行 init-project.sh 部署到專案"
   echo "  cd .."
   echo "  bash Sam_AI_Rule/init-project.sh"
+  echo
+  echo "[Dev 場景] 編輯 source clone 的 .js / .md 後，跑 'ai-guardian self-update'"
+  echo "          即可同步到 canonical（不需重跑 bootstrap）"
 else
-  # 偵測平台，給出對應的修復建議（Windows 跟 Unix 失敗原因常常完全不同）
-  case "$(uname)" in
-    *CYGWIN*|*MINGW*|*MSYS*) PLATFORM="windows" ;;
-    Darwin) PLATFORM="mac" ;;
-    *) PLATFORM="linux" ;;
-  esac
-
   echo "[warn] npm link 失敗（exit code: $LINK_EXIT）。"
-  echo "依賴已安裝完成，但全域指令未註冊。"
+  echo "依賴已安裝，但全域指令未註冊。"
   echo
 
   if [ "$PLATFORM" = "windows" ]; then
@@ -90,25 +143,24 @@ else
     echo "  1. 關掉所有跑過 ai-guardian 的 terminal / IDE 視窗"
     echo "  2. （PowerShell）taskkill /F /IM node.exe   # 殺掉殘留 node"
     echo "  3. npm uninstall -g ai-guardian"
-    echo "  4. cd ai-guardian && npm link"
+    echo "  4. cd \"$CANONICAL_DIR\" && npm link"
     echo
-    echo "選項 B：跳過 npm link，用 PowerShell 函式（不碰全域）"
-    echo "  在你的 \$PROFILE 加入這一行："
-    echo "  function ai-guardian { node \"$(pwd)/bin/cli.js\" @args }"
+    echo "選項 B：跳過 npm link，加 alias 指向 canonical"
+    echo "  alias ai-guardian='node \"$CANONICAL_DIR/bin/cli.js\"'"
     echo
     echo "選項 C：每次用完整路徑呼叫"
-    echo "  node $(pwd)/bin/cli.js <command>"
+    echo "  node \"$CANONICAL_DIR/bin/cli.js\" <command>"
   else
     echo "Unix 上最常見原因是權限不足（無法寫入 npm 全域目錄）："
     echo
     echo "選項 A：以 sudo 重新註冊"
-    echo "  cd ai-guardian && sudo npm link"
+    echo "  cd \"$CANONICAL_DIR\" && sudo npm link"
     echo
     echo "選項 B：手動加 alias 到 shell profile（不需要 sudo）"
     echo "  在 ~/.bashrc 或 ~/.zshrc 加入下面這行："
-    echo "  alias ai-guardian='node $(pwd)/bin/cli.js'"
+    echo "  alias ai-guardian='node $CANONICAL_DIR/bin/cli.js'"
     echo
     echo "選項 C：每次用完整路徑呼叫"
-    echo "  node $(pwd)/bin/cli.js <command>"
+    echo "  node $CANONICAL_DIR/bin/cli.js <command>"
   fi
 fi

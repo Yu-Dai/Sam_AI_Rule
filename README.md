@@ -29,7 +29,21 @@ bash bootstrap.sh        # Linux / Mac / Windows git bash
 .\bootstrap.ps1          # Windows PowerShell
 ```
 
-bootstrap 只做一件事：**`cd ai-guardian && npm install && npm link`**，全域註冊 `ai-guardian` 指令。每台機器跑一次即可。
+bootstrap 做的事：**把 `ai-guardian/` source 複製到 canonical 路徑 → npm install → npm link**。
+
+**Canonical 路徑（global ai-guardian 永遠指向這裡）**：
+- Linux / Mac：`~/.ai-guardian/`
+- Windows：`%LOCALAPPDATA%\ai-guardian\`
+- 環境變數覆寫：`AI_GUARDIAN_CANONICAL_DIR`
+
+**為什麼不直接 npm link 到 clone？** 解開「source clone = global target」的耦合：
+- 多個 Sam_AI_Rule clone（不同機器、不同分支實驗）不會互搶全域 link
+- 重跑 bootstrap = 覆寫 canonical，永遠可預期目標
+- 想升級就在任一 clone `git pull` 後重跑 bootstrap
+
+**Dev 場景**（編輯 ai-guardian 本身的 source）：
+- 改完 `.js` / `.md` 後 → 跑 `ai-guardian self-update` 把 src/bin/templates 增量同步到 canonical
+- 不必每次重跑完整 bootstrap（不需 npm install）
 
 ### 每個新專案：clone Sam_AI_Rule 並初始化
 
