@@ -45,6 +45,7 @@ coverage/
 #    模板放在 ai-guardian/templates/PROJECT.md。/PROJECT.md 只匹配根目錄，不影響子目錄） ===
 /PROJECT.md
 /AGENTS.md
+/CLAUDE.md
 /ai-guardian.json
 /.cursor/
 /.claude/

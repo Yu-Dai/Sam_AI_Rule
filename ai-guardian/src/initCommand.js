@@ -158,14 +158,27 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
     console.log('ℹ️  AGENTS.md 看起來已被使用者客製化（未帶 auto-gen marker），跳過覆寫。');
   }
 
-  // 4b. 寫入 CLAUDE.md stub — 只是給 Claude Code 與人類瀏覽者的引導，本體在 AGENTS.md
+  // 4b. 寫入 CLAUDE.md stub — 用 Claude Code 原生 @import 語法把 AGENTS.md 載入 context
+  //     原本用 markdown link「See [AGENTS.md](AGENTS.md)」是無效的 — Claude Code 不會主動 fetch，
+  //     只會讀到「請去看 AGENTS.md」的字面文字。改用官方 @import 後 Claude Code 會在 session
+  //     啟動時把 AGENTS.md 全文展開進 context，等同 Claude Code 直接讀到 AGENTS.md 全文。
+  //     參考：https://code.claude.com/docs/en/memory（"Claude Code reads CLAUDE.md, not AGENTS.md"）
+  //
+  //     注意：HTML comments 在 Claude Code 看到時會被剝除，所以人類維護備註不會污染 Claude context；
+  //           marker 字串「<!-- ai-guardian:claude-stub -->」也是 HTML comment，但 init 是直接讀
+  //           檔案判斷 marker，不受剝除影響。
   const claudeStub = [
     CLAUDE_MD_MARKER,
     '# CLAUDE.md',
     '',
-    'See [AGENTS.md](AGENTS.md) for the full ruleset (individual identity, behavior principles §1–§21, hard rules, AI Guardian tool spec).',
+    '<!--',
+    '  Claude Code stub by ai-guardian.',
+    '  下方「@AGENTS.md」是 Claude Code 原生 import 語法 — session 啟動時會把 AGENTS.md 全文展開進 context。',
+    '  其他 IDE（Cursor / Antigravity / Roo / Windsurf）直接讀 root AGENTS.md，這個 import 對它們無作用也無害。',
+    '  per-project 客製：刪掉本檔第一行的 stub marker 註解後，ai-guardian init 不會再覆寫本檔。',
+    '-->',
     '',
-    '本檔僅是引導 stub — 規則本體在 AGENTS.md。要做 per-project 客製，請刪掉本檔第一行的 marker 註解，init 即不再覆寫。',
+    '@AGENTS.md',
     '',
   ].join('\n');
   const claudeResult = writeAutoGenIfPossible(path.join(targetDir, 'CLAUDE.md'), CLAUDE_MD_MARKER, claudeStub);
