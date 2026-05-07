@@ -101,6 +101,9 @@ async function main() {
         }
         initProject(process.cwd(), selected, isAdopt);
         rl.close();
+        // 顯式 process.exit：readline 在 Windows Git Bash 上 close 後仍可能持有 stdin handle，
+        // 導致 Node event loop 不退、父 shell（例如 init-project.sh）卡死要 user Ctrl+C → exit 130
+        process.exit(0);
       });
     }
 

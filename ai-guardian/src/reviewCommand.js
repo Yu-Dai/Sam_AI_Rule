@@ -37,6 +37,54 @@ const PATCH_PATTERNS_REGEX = [
 const JS_FAMILY_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx']);
 
 /**
+ * 判斷一個 Q section body 是否「未填」。
+ * 規則：if 沒勾選任何 [x] 且仍有 placeholder `_` → 未填
+ * 為什麼這樣判斷：
+ * - [x] 勾選代表 user 對這次任務做出了明確選擇（即便沒展開細節，至少已 stance）
+ * - 完全沒 [x] 又留著 `_` placeholder = 動工聲明跳過，反映 AI 沒走完 pre-flight
+ */
+function isQSectionUnfilled(body) {
+  // 任何層級的 [x] 勾選 = 已表態
+  const hasCheckedBox = /^\s*-\s*\[[xX]\]/m.test(body);
+  if (hasCheckedBox) return false;
+
+  // 沒勾選的話，找看看 placeholder `_` 還在不在
+  // 涵蓋四種 placeholder 結構（template 中實際出現的形式）：
+  //   1. `label：_`（行尾）         — 例：「找到：_」
+  //   2. `> _`（quote 行只有 _）    — 例：Q2 入口
+  //   3. `- [ ] _`（bullet+checkbox 後接 _） — 例：Q1 預計修改
+  //   4. `  - _`（縮排子 bullet 只有 _）     — 例：Q5「請 user 提供：」下的 sub-bullet
+  const hasUnfilledPlaceholder =
+    /[:：]\s*_\s*$/m.test(body) ||
+    /^>\s*_\s*$/m.test(body) ||
+    /^\s*-\s*\[\s*\]\s+_\s*$/m.test(body) ||
+    /^\s+-\s+_\s*$/m.test(body);
+
+  return hasUnfilledPlaceholder;
+}
+
+/**
+ * 掃描 .guardian/current-task.md 的 Q1–Q7 是否填寫。回傳警告字串陣列（empty = 全填或檔不存在）。
+ * Loose 檢查：只警告，不擋 commit（讓 AI 看到提醒但不 cascade 失敗）。
+ */
+function checkCurrentTaskFilled(currentTaskMdPath) {
+  if (!fs.existsSync(currentTaskMdPath)) return [];
+  const content = fs.readFileSync(currentTaskMdPath, 'utf-8');
+
+  // 用 ### Qn. 切片：parts[0] 是序言，後面交替 [title, body, title, body, ...]
+  const parts = content.split(/\n### (Q\d+\.[^\n]+)\n/);
+  const warnings = [];
+  for (let i = 1; i < parts.length; i += 2) {
+    const title = parts[i];
+    const body = parts[i + 1] || '';
+    if (isQSectionUnfilled(body)) {
+      warnings.push(`⚠️  [Pre-flight 未填] ${title.trim()}`);
+    }
+  }
+  return warnings;
+}
+
+/**
  * 用 AST 掃描 JS/TS 補丁模式。回傳 [{label, sample}] 或 null（parse 失敗）。
  * 走 AST 而非 regex 避免誤抓字串 / regex literal 內的程式碼樣文字。
  */
@@ -333,6 +381,18 @@ function runReview(projectRoot, force = false) {
     }
   } else {
     console.log('\n✅ 自動掃描通過！');
+  }
+
+  // 5.5 Pre-flight 填寫檢查（warn-only，不擋 commit）
+  //     AGENTS.md 哲學原則靠 baseline，動工瞬間裁決靠 current-task.md Q1–Q7。
+  //     若 AI 跳過裁決直接動工，這裡至少印警告留個 nudge。
+  const currentTaskMdPath = path.join(projectRoot, '.guardian', 'current-task.md');
+  const fillWarnings = checkCurrentTaskFilled(currentTaskMdPath);
+  if (fillWarnings.length > 0) {
+    console.log('\n--- ℹ️  Pre-flight 填寫檢查（warn-only） ---');
+    fillWarnings.forEach(w => console.log(w));
+    console.log('   說明：上述 Q 看起來沒勾選任何選項、placeholder `_` 仍在。');
+    console.log('   未填本身不擋 commit，但 AI 應自我檢查是否真的能跳過這些裁決。');
   }
 
   // 6. 更新宣言：標記審查已通過
