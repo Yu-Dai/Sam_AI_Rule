@@ -4,7 +4,7 @@
 > 編輯入口：改 template 後重跑 `ai-guardian init` 即覆寫本檔。
 > per-project 客製：刪除本檔第一行的 `— AI Guardian Project Rules` 後綴後，init 會視為使用者客製版本不再覆寫。
 
-Sam_AI_Rule 個人與專案規則的單一真理來源。所有 AI coding tool（Claude Code、Cursor、Antigravity、Roo、Windsurf 等）都讀本檔。
+Sam_AI_Rule 個人與專案規則的單一真理來源。所有 AI coding tool（Claude Code、Cursor、Antigravity、Roo、Windsurf、ELI 等）都讀本檔。
 
 **取捨：** 這份規則偏向謹慎、透明、外科式改動，速度其次。瑣碎任務自行斟酌。
 

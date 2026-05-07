@@ -57,6 +57,13 @@ const IDE_ADAPTERS = {
     skillDir: '.claude/skills/adversarial-debate',
     renderRule: () => '---\ndescription: AI Guardian 系統強制操作約束（完整內容見 AGENTS.md）\n---\n\n' + REFERENCE_NOTE + '\n',
   },
+  eli: {
+    label: 'ELI (伊麗)',
+    ruleFile: '.ili/rules/ai_guardian.md',
+    skillDir: '.ili/skills/adversarial-debate',
+    // ELI 原生讀 root AGENTS.md，rule 檔只是備援指向（同 antigravity / roo / windsurf 模式）
+    renderRule: () => REFERENCE_NOTE + '\n',
+  },
 };
 
 function initProject(targetDir, ides = ['antigravity'], isAdopt = true, options = {}) {
@@ -171,7 +178,7 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true, options 
     '<!--',
     '  Claude Code stub by ai-guardian.',
     '  下方「@AGENTS.md」是 Claude Code 原生 import 語法 — session 啟動時會把 AGENTS.md 全文展開進 context。',
-    '  其他 IDE（Cursor / Antigravity / Roo / Windsurf）直接讀 root AGENTS.md，這個 import 對它們無作用也無害。',
+    '  其他 IDE（Cursor / Antigravity / Roo / Windsurf / ELI）直接讀 root AGENTS.md，這個 import 對它們無作用也無害。',
     '  per-project 客製：刪掉本檔第一行的 stub marker 註解後，ai-guardian init 不會再覆寫本檔。',
     '-->',
     '',
