@@ -78,7 +78,7 @@ function checkCurrentTaskFilled(currentTaskMdPath) {
     const title = parts[i];
     const body = parts[i + 1] || '';
     if (isQSectionUnfilled(body)) {
-      warnings.push(`⚠️  [Pre-flight 未填] ${title.trim()}`);
+      warnings.push(`[unfilled] ${title.trim()}`);
     }
   }
   return warnings;
@@ -170,8 +170,7 @@ function runReview(projectRoot, force = false) {
 
   // 1. 確認任務宣言存在
   if (!fs.existsSync(manifestPath)) {
-    console.error('❌ 找不到任務宣言！');
-    console.error('   請先執行 ai-guardian start "<任務描述>" 再開始工作。');
+    console.error('[err] 找不到任務宣言。先跑 ai-guardian start "<任務描述>"。');
     process.exit(1);
   }
 
@@ -179,17 +178,14 @@ function runReview(projectRoot, force = false) {
 
   // 舊版 manifest（fileSnapshot 格式）阻擋——機制已升級為 git-native diff，雙軌共存會誤判
   if (!manifest.baselineCommit) {
-    console.error('❌ [格式升級] 此任務的 manifest 是舊版 fileSnapshot 格式，無法以新版 review 比對。');
-    console.error('   請完結這個任務（手動 git commit + git checkout main），或刪除 .guardian/current-task.json 後重新 ai-guardian start。');
+    console.error('[err] manifest 是舊版 fileSnapshot 格式，新版 review 無法比對。');
+    console.error('  fix: 手動 commit + checkout main 完結此任務；或刪 .guardian/current-task.json 後重新 start。');
     process.exit(1);
   }
 
-  console.log(`\n📋 AI Guardian 改動審查報告`);
-  console.log(`================================`);
-  console.log(`任務：${manifest.taskDescription}`);
-  console.log(`分支：${manifest.branch}`);
-  console.log(`開始：${manifest.startedAt}`);
-  console.log(`================================\n`);
+  console.log(`\n[review] ${manifest.taskDescription}`);
+  console.log(`         branch: ${manifest.branch}`);
+  console.log(`         since:  ${manifest.startedAt}\n`);
 
   const warnings = [];
   const errors = [];
@@ -208,11 +204,11 @@ function runReview(projectRoot, force = false) {
   }
 
   if (!currentBranch || currentBranch === 'HEAD') {
-    warnings.push('⚠️  無法確認目前分支（可能是尚無任何 commit 的全新 repo），假設已在正確 Branch 上，繼續審查...');
+    warnings.push('[warn] 無法讀取當前分支（可能是無 commit 的全新 repo），假設位於 task branch，繼續審查');
   } else if (currentBranch !== manifest.branch) {
     errors.push('[Branch 錯誤] 目前在 "' + currentBranch + '"，但任務應在 "' + manifest.branch + '" 執行！');
   } else {
-    infos.push('✅ 分支正確: ' + currentBranch);
+    infos.push('[ok] branch: ' + currentBranch);
   }
 
   // 3. 用 git diff 比對 baseline commit 與當下工作區
@@ -221,8 +217,8 @@ function runReview(projectRoot, force = false) {
   try {
     diff = diffAgainstBaseline(projectRoot, manifest.baselineCommit);
   } catch (e) {
-    console.error(`❌ [diff 失敗] 無法跟 baseline (${manifest.baselineCommit}) 比對：${e.message}`);
-    console.error('   baseline commit 可能已被 git gc 回收，或當前不在 git repo。');
+    console.error(`[err] diff 失敗，無法跟 baseline (${manifest.baselineCommit}) 比對：${e.message}`);
+    console.error('  hint: baseline commit 可能已被 git gc 回收，或當前不在 git repo。');
     process.exit(1);
   }
 
@@ -232,35 +228,35 @@ function runReview(projectRoot, force = false) {
   try {
     newLinesPerFile = getNewLinesPerFile(projectRoot, manifest.baselineCommit);
   } catch (e) {
-    console.warn(`⚠️  newLines diff 失敗，patch scanner 退化為全文掃描：${e.message}`);
+    console.warn(`[warn] newLines diff 失敗，patch scanner 退化為全文掃描：${e.message}`);
   }
 
   const { added, modified, deleted, renamed, typeChanged } = diff;
   const totalChanges = added.length + modified.length + deleted.length + renamed.length + typeChanged.length;
 
   if (totalChanges === 0) {
-    warnings.push(`⚠️ 未偵測到任何改動（git diff 回報 baseline 與當下完全一致）。請確認你的 edit 是否真的寫入磁碟。`);
+    warnings.push(`[warn] 未偵測到任何改動（baseline 與當下一致）。確認 edit 是否真寫入磁碟。`);
   }
 
   if (added.length > 0) {
-    infos.push(`\n📄 新增檔案 (${added.length}):`);
-    added.forEach(f => infos.push(`   + ${f}`));
+    infos.push(`\nadded (${added.length}):`);
+    added.forEach(f => infos.push(`  + ${f}`));
   }
   if (modified.length > 0) {
-    infos.push(`\n📝 修改檔案 (${modified.length}):`);
-    modified.forEach(f => infos.push(`   ~ ${f}`));
+    infos.push(`\nmodified (${modified.length}):`);
+    modified.forEach(f => infos.push(`  ~ ${f}`));
   }
   if (deleted.length > 0) {
-    infos.push(`\n🗑️  刪除檔案 (${deleted.length}):`);
-    deleted.forEach(f => infos.push(`   - ${f}`));
+    infos.push(`\ndeleted (${deleted.length}):`);
+    deleted.forEach(f => infos.push(`  - ${f}`));
   }
   if (renamed.length > 0) {
-    infos.push(`\n🔀 重新命名 (${renamed.length}):`);
-    renamed.forEach(r => infos.push(`   ${r.from} → ${r.to}`));
+    infos.push(`\nrenamed (${renamed.length}):`);
+    renamed.forEach(r => infos.push(`  ${r.from} → ${r.to}`));
   }
   if (typeChanged.length > 0) {
-    infos.push(`\n🔧 類型變更 (${typeChanged.length}):`);
-    typeChanged.forEach(f => infos.push(`   * ${f}`));
+    infos.push(`\ntype-changed (${typeChanged.length}):`);
+    typeChanged.forEach(f => infos.push(`  * ${f}`));
   }
 
   // 4. 流程合理性回饋：分析本次實際改動的檔案類型，告訴 AI 下次是否需要走 guardian 流程
@@ -302,16 +298,13 @@ function runReview(projectRoot, force = false) {
 
     if (allChangedPaths.length > 0) {
       if (codeFiles.length === 0 && rulesFiles.length > 0 && docFiles.length === 0 && otherFiles.length === 0) {
-        infos.push('\nℹ️  [流程提示] 本次只修改了 AI rules 設定檔。');
-        infos.push('   這類任務下次不需要走 guardian 流程，可直接修改 rules 檔案。');
+        infos.push('\n[hint] 本次只動 AI rules 檔。下次這類任務不需走 guardian。');
       } else if (codeFiles.length === 0 && docFiles.length > 0 && rulesFiles.length === 0 && otherFiles.length === 0) {
-        infos.push('\nℹ️  [流程提示] 本次只修改了文件檔案（.md / .txt）。');
-        infos.push('   這類任務下次不需要走 guardian 流程，可直接修改。');
+        infos.push('\n[hint] 本次只動文件（.md/.txt）。下次這類任務不需走 guardian。');
       } else if (codeFiles.length === 0 && (docFiles.length > 0 || rulesFiles.length > 0)) {
-        infos.push('\nℹ️  [流程提示] 本次沒有修改任何程式碼，只改了文件或 rules 設定。');
-        infos.push('   這類任務下次不需要走 guardian 流程。');
+        infos.push('\n[hint] 本次無 code 改動，只動文件或 rules。下次這類任務不需走 guardian。');
       } else if (codeFiles.length > 0) {
-        infos.push(`\n✅ [流程確認] 本次修改了 ${codeFiles.length} 個程式碼檔案，guardian 流程正確。`);
+        infos.push(`\n[ok] ${codeFiles.length} code files modified — guardian flow correct.`);
       }
     }
   }
@@ -346,13 +339,13 @@ function runReview(projectRoot, force = false) {
       grouped[label].push(sample);
     }
     for (const [label, samples] of Object.entries(grouped)) {
-      warnings.push(`⚠️  [疑似補丁] ${relPath} 發現 ${samples.length} 處 ${label}：${samples.slice(0, MATCH_PREVIEW_COUNT).join(', ')}`);
+      warnings.push(`[patch?] ${relPath}: ${samples.length} 處 ${label}：${samples.slice(0, MATCH_PREVIEW_COUNT).join(', ')}`);
     }
 
     // 偵測殭屍命名（新增或修改的檔案帶有殭屍命名）
     const fileName = path.basename(relPath, ext).toLowerCase();
     if (/v\d+$/i.test(fileName) || fileName.includes('old') || fileName.includes('backup')) {
-      errors.push(`❌ [殭屍命名] "${relPath}" 帶有殭屍特徵！請改用正式命名（如 _Next, _Rewrite）。`);
+      errors.push(`[zombie] ${relPath}: 帶有殭屍命名特徵（v\\d+ / old / backup）。改用正式命名（_Next / _Rewrite）。`);
     }
   }
 
@@ -360,27 +353,25 @@ function runReview(projectRoot, force = false) {
   infos.forEach(msg => console.log(msg));
 
   if (warnings.length > 0 || errors.length > 0) {
-    console.log('\n--- ⚠️ 審查發現問題 ---');
-    warnings.forEach(w => console.log(w));
-    errors.forEach(e => console.error(e));
+    console.log('\n[issues]');
+    warnings.forEach(w => console.log('  ' + w));
+    errors.forEach(e => console.error('  ' + e));
   }
 
   if (errors.length > 0) {
-    console.log('\n❌ 審查失敗：請修復上述嚴重問題後再提交。');
+    console.error('\n[err] review 失敗。修復上述嚴重問題後重試。');
     process.exit(1);
   }
 
   if (warnings.length > 0) {
     if (!force) {
-      console.log('\n⚠️  [防禦網攔截] 審查發現警告項目！為防止 AI 串聯指令自動忽略，本次審查已被阻擋。');
-      console.log('🤖 給 AI 的指示：請仔細閱讀上述警告。若你確認這些寫法是合理且必然的 (非退化或補丁)，');
-      console.log('請改用 "ai-guardian review --force" 來確認並強制通過本次審查。');
+      console.log('\n[blocked] 有警告項目。AI: 確認非退化或補丁後，用 ai-guardian review --force 強制通過。');
       process.exit(1);
     } else {
-      console.log('\n⚠️  審查通過（已使用 --force 忽略警告）：已確認警告項目為刻意設計。');
+      console.log('\n[ok] review 通過（--force 已忽略警告）');
     }
   } else {
-    console.log('\n✅ 自動掃描通過！');
+    console.log('\n[ok] 自動掃描通過');
   }
 
   // 5.5 Pre-flight 填寫檢查（warn-only，不擋 commit）
@@ -389,10 +380,9 @@ function runReview(projectRoot, force = false) {
   const currentTaskMdPath = path.join(projectRoot, '.guardian', 'current-task.md');
   const fillWarnings = checkCurrentTaskFilled(currentTaskMdPath);
   if (fillWarnings.length > 0) {
-    console.log('\n--- ℹ️  Pre-flight 填寫檢查（warn-only） ---');
-    fillWarnings.forEach(w => console.log(w));
-    console.log('   說明：上述 Q 看起來沒勾選任何選項、placeholder `_` 仍在。');
-    console.log('   未填本身不擋 commit，但 AI 應自我檢查是否真的能跳過這些裁決。');
+    console.log('\n[pre-flight] 未填的 Q（warn-only，不擋 commit）：');
+    fillWarnings.forEach(w => console.log('  ' + w));
+    console.log('  AI 自審：這些 Q 真的能跳過嗎？跳過 = 沒做動工前裁決。');
   }
 
   // 6. 更新宣言：標記審查已通過
@@ -419,34 +409,18 @@ function runReview(projectRoot, force = false) {
   ];
 
   console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🤖 [AI 自我審計] 執行 git commit 前的語意防線');
-  console.log('   自動掃描只能守語法，以下由你對宣言負責。');
-  console.log('   請在對話框逐條回答（附理由），User 確認後再 commit。');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('[self-attest] 自動掃描守語法，以下由 AI 對宣言負責。逐條回答，user 確認後再 commit：');
   console.log('');
-  console.log('本次改動：');
-  changedFiles.forEach(f => console.log(`   ${f}`));
+  console.log('changes:');
+  changedFiles.forEach(f => console.log(`  ${f}`));
   console.log('');
-  console.log('□ 溯源修復   所有 Bug Fix 都修在根因，');
-  console.log('             沒有在下游用條件判斷掩蓋上游的髒輸入或錯誤狀態？');
+  console.log('  □ root-cause fix    — bug fix 都修在根因，沒在下游條件判斷掩蓋');
+  console.log('  □ no dual-track     — 舊邏輯已替換或刪除，無「兼容」平行路徑');
+  console.log('  □ no zombie         — 無除錯輸出、無 unused import、無 TODO 「暫時保留」');
+  console.log('  □ no hardcoded secret — 密碼 / token / key 不寫死在 source');
+  console.log('  □ principles, not examples — 改規則 / 文件時寫普遍原則，不複製特定 case');
   console.log('');
-  console.log('□ 無雙軌     新舊邏輯沒有同時存活——');
-  console.log('             舊邏輯已被完整替換或刪除，不存在因「兼容」而保留的平行路徑？');
-  console.log('');
-  console.log('□ 無殭屍     沒有殘留除錯輸出、未使用的引入、');
-  console.log('             未完成的標記、或任何「暫時保留」的妥協片段？');
-  console.log('');
-  console.log('□ 無硬編機密 沒有將任何密碼、金鑰、Token 或機密資訊寫死在程式碼中？');
-  console.log('             機密的正確位置是環境變數或後端驗證介面，不是原始碼。');
-  console.log('');
-  console.log('□ 原則非範例 若本次有修改規則、協議或說明文件，');
-  console.log('             寫入的是「普遍原則」，而非從對話或 debug 案例中');
-  console.log('             直接複製的特定函式名、變數名或錯誤訊息？');
-  console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('確認完畢後，執行 git commit。');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('回答完 → git commit');
 }
 
 module.exports = { runReview };

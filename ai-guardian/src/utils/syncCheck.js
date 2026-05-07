@@ -185,19 +185,15 @@ function prompt(question) {
 
 function printStaleHeader(remoteName, branch, behindCount, remoteSha) {
   console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`⚠️  本地 ${branch} 落後 ${remoteName}/${branch} ${behindCount ?? '?'} 個 commit`);
-  console.log(`   遠端 HEAD: ${remoteSha.slice(0, 12)}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`[sync-check] 本地 ${branch} 落後 ${remoteName}/${branch} ${behindCount ?? '?'} 個 commit`);
+  console.log(`             remote HEAD: ${remoteSha.slice(0, 12)}`);
 }
 
 function printDivergedHeader(remoteName, branch, ahead, behind) {
   console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`⚠️  本地 ${branch} 與 ${remoteName}/${branch} 分歧（領先 ${ahead ?? '?'}、落後 ${behind ?? '?'}）`);
-  console.log('   這比單純落後更嚴重：兩邊各有對方沒有的 commit。');
-  console.log('   sync-check 不提供自動繞過，請手動 rebase 或 merge 後重試。');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`[sync-check] 本地 ${branch} 與 ${remoteName}/${branch} 分歧（領先 ${ahead ?? '?'}、落後 ${behind ?? '?'}）`);
+  console.log(`             兩邊各有對方沒有的 commit，比單純落後嚴重。`);
+  console.log(`             無自動繞過，手動 rebase 或 merge 後重試。`);
 }
 
 /**
@@ -219,7 +215,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
     const cfg = loadRemoteConfig(projectRoot);
     const branch = detectMainBranch(projectRoot, cfg.name, cfg.branch);
     if (!branch) {
-      console.log(`ℹ️  [sync-check] 找不到主幹分支（${cfg.name}/main 或 ${cfg.name}/master），跳過遠端偵測。`);
+      console.log(`[sync-check] 找不到主幹分支（${cfg.name}/main 或 ${cfg.name}/master），skip。`);
       return { status: STATUS.SKIPPED };
     }
 
@@ -231,19 +227,19 @@ async function checkRemoteSync(projectRoot, opts = {}) {
     if (!fetchRes.ok) {
       switch (fetchRes.reason) {
         case 'no-remote':
-          console.log(`ℹ️  [sync-check] 遠端 ${cfg.name} 不存在，跳過。`);
+          console.log(`[sync-check] 遠端 ${cfg.name} 不存在，skip。`);
           return { status: STATUS.SKIPPED };
         case 'network':
-          console.log(`ℹ️  [sync-check] 離線或無法連線遠端，跳過。`);
+          console.log(`[sync-check] 離線或無法連線遠端，skip。`);
           return { status: STATUS.SKIPPED };
         case 'timeout':
-          console.log(`⚠️  [sync-check] fetch ${cfg.name}/${branch} 逾時（${FETCH_TIMEOUT_MS}ms），跳過。`);
+          console.log(`[sync-check] fetch ${cfg.name}/${branch} 逾時（${FETCH_TIMEOUT_MS}ms），skip。`);
           return { status: STATUS.SKIPPED };
         case 'auth':
-          console.log(`⚠️  [sync-check] 認證失敗（${fetchRes.detail}），請檢查 git 憑證設定。本次跳過。`);
+          console.log(`[sync-check] 認證失敗（${fetchRes.detail}）。檢查 git 憑證後重試，本次 skip。`);
           return { status: STATUS.SKIPPED };
         default:
-          console.log(`⚠️  [sync-check] fetch 失敗：${fetchRes.detail || '未知原因'}。本次跳過。`);
+          console.log(`[sync-check] fetch 失敗：${fetchRes.detail || '未知原因'}，skip。`);
           return { status: STATUS.SKIPPED };
       }
     }
@@ -253,14 +249,14 @@ async function checkRemoteSync(projectRoot, opts = {}) {
     const localSha = getSha(projectRoot, branch);
     const remoteSha = getSha(projectRoot, remoteRef);
     if (!localSha || !remoteSha) {
-      console.log(`ℹ️  [sync-check] 無法取得 ${branch} 或 ${remoteRef} 的 SHA，跳過。`);
+      console.log(`[sync-check] 無法取得 ${branch} 或 ${remoteRef} 的 SHA，skip。`);
       return { status: STATUS.SKIPPED };
     }
 
     const cmp = compareLocalRemote(projectRoot, localSha, remoteSha);
     if (cmp === 'same' || cmp === 'ahead') return { status: STATUS.OK };
     if (cmp === 'unknown') {
-      console.log(`⚠️  [sync-check] 無法判定本地與遠端關係，跳過。`);
+      console.log(`[sync-check] 無法判定本地與遠端關係，skip。`);
       return { status: STATUS.SKIPPED };
     }
 
@@ -269,7 +265,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
       const ahead = countCommitsBetween(projectRoot, remoteSha, localSha);
       const behind = countCommitsBetween(projectRoot, localSha, remoteSha);
       printDivergedHeader(cfg.name, branch, ahead, behind);
-      console.log(`💡 建議：git checkout ${branch} && git pull --rebase ${cfg.name} ${branch}，解決衝突後重試。`);
+      console.log(`  fix: git checkout ${branch} && git pull --rebase ${cfg.name} ${branch}，解決衝突後重試。`);
       return { status: STATUS.ABORTED };
     }
 
@@ -279,7 +275,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
     // 6a. --force-stale：明示繞過
     if (forceStale) {
       printStaleHeader(cfg.name, branch, behind, remoteSha);
-      console.log('🟡 [--force-stale] 已明示繞過 sync-check，繼續流程。');
+      console.log('[--force-stale] 已明示繞過 sync-check，繼續流程。');
       // 非 strict（start）：寫入決策避免後續同 SHA 重複擋
       // strict（finish）：一次性，不寫決策
       if (!strict) {
@@ -291,7 +287,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
 
     // 6b. 非 strict 模式且已有決策：自動沿用
     if (!strict && decisions.hasDecision(projectRoot, remoteSha)) {
-      console.log(`ℹ️  [sync-check] 本地 ${branch} 落後 ${cfg.name}/${branch} ${behind ?? '?'} 個 commit，但已有歷史決策不拉，沿用。`);
+      console.log(`[sync-check] 本地 ${branch} 落後 ${cfg.name}/${branch} ${behind ?? '?'} 個 commit，已有歷史決策不拉，沿用。`);
       return { status: STATUS.OK };
     }
 
@@ -305,7 +301,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
         console.log(`  （若你有意識要繞過，請改用：ai-guardian finish --force-stale）`);
         const ans = (await prompt('您的選擇 [P/c]: ')).trim().toLowerCase();
         if (ans === '' || ans === 'p') {
-          console.log(`\n💡 請執行：git checkout ${branch} && git pull --rebase ${cfg.name} ${branch}，然後重新跑 ai-guardian finish。`);
+          console.log(`\n  fix: git checkout ${branch} && git pull --rebase ${cfg.name} ${branch}，然後重跑 ai-guardian finish。`);
         } else {
           console.log('\n已取消 finish。');
         }
@@ -322,7 +318,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
           return { status: STATUS.OK };
         }
         if (ans === '' || ans === 'p') {
-          console.log(`\n💡 請執行：git checkout ${branch} && git pull --rebase ${cfg.name} ${branch}，然後重新跑 ai-guardian start。`);
+          console.log(`\n  fix: git checkout ${branch} && git pull --rebase ${cfg.name} ${branch}，然後重跑 ai-guardian start。`);
         } else {
           console.log('\n已取消 start。');
         }
@@ -332,7 +328,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
 
     // 6d. 非互動模式：fail with clear message（讓上層 AI 看到並轉述給 user）
     printStaleHeader(cfg.name, branch, behind, remoteSha);
-    console.log('❌ [非互動模式] 偵測到本地主幹落後遠端，無法自動決策。');
+    console.log('[err] 非互動模式 + 本地主幹落後遠端，無法自動決策。');
     console.log('');
     console.log('解法二選一：');
     console.log(`  (a) 先同步：git checkout ${branch} && git pull --rebase ${cfg.name} ${branch}，然後重跑此指令`);
@@ -342,7 +338,7 @@ async function checkRemoteSync(projectRoot, opts = {}) {
   } catch (err) {
     // fail-open：sync-check 自身炸了，loud warn 但放行
     console.log('');
-    console.log('⚠️  [sync-check] 同步檢查模組發生例外，已 fail-open 放行。');
+    console.log('[warn] sync-check 模組例外，已 fail-open 放行。');
     console.log(`   ${err && err.message ? err.message : err}`);
     console.log('   建議檢查網路 / git 設定後重跑。');
     return { status: STATUS.SKIPPED };

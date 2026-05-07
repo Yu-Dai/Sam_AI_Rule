@@ -22,7 +22,7 @@ const SLUG_ASCII_BUDGET = MAX_SLUG_LENGTH - SLUG_HASH_LENGTH - 1;
 async function runStart(projectRoot, taskDescription, options = {}) {
   const { forceStale = false } = options;
   if (!taskDescription || taskDescription.trim() === '') {
-    console.error('❌ 請提供任務描述！用法: ai-guardian start "<任務描述>"');
+    console.error('[err] 缺任務描述。用法: ai-guardian start "<任務描述>"');
     process.exit(1);
   }
 
@@ -35,7 +35,7 @@ async function runStart(projectRoot, taskDescription, options = {}) {
   try {
     execSync('git status', { cwd: projectRoot, stdio: 'ignore' });
   } catch (e) {
-    console.error('❌ 此目錄尚未初始化 Git，請先執行 git init 或 ai-guardian init。');
+    console.error('[err] 不是 git repo。先跑 git init 或 ai-guardian init。');
     process.exit(1);
   }
 
@@ -69,13 +69,9 @@ async function runStart(projectRoot, taskDescription, options = {}) {
     const hasRulesSignal = RULES_SIGNALS.some(k => desc.includes(k));
 
     if (hasRulesSignal) {
-      console.log('⚠️  [流程建議] 任務描述看起來只涉及 AI rules 設定檔修改。');
-      console.log('   這類任務不需要走 guardian 流程，可直接修改 rules 檔案。');
-      console.log('   若此任務確實包含程式碼修改，請繼續；否則建議取消此 start。\n');
+      console.log('[hint] 描述看起來只動 AI rules 檔。這類任務不需走 guardian — 確認真的有改 code 才繼續。\n');
     } else if (hasDocSignal && !hasCodeSignal) {
-      console.log('⚠️  [流程建議] 任務描述看起來可能只涉及文件修改（.md / 說明 / 備注）。');
-      console.log('   這類任務不需要走 guardian 流程，可直接修改文件。');
-      console.log('   若此任務確實包含程式碼修改，請繼續；否則建議取消此 start。\n');
+      console.log('[hint] 描述看起來只動文件（.md/.txt）。這類任務不需走 guardian — 確認真的有改 code 才繼續。\n');
     }
   }
 
@@ -84,17 +80,13 @@ async function runStart(projectRoot, taskDescription, options = {}) {
   if (fs.existsSync(manifestPath)) {
     try {
       const prev = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
-      console.error('❌ [未完結任務] 偵測到上一個任務尚未完結，無法開啟新任務！');
-      console.error(`   任務描述：${prev.taskDescription}`);
-      console.error(`   任務分支：${prev.branch}`);
-      console.error(`   開始時間：${prev.startedAt}`);
-      console.error('\n💡 請先完結上一個任務，再開始新任務：');
-      console.error('   ① ai-guardian review   ← 審查改動');
-      console.error('   ② git commit           ← 提交');
-      console.error('   ③ ai-guardian finish   ← 完結任務、合併主線');
+      console.error('[err] 上一個任務未完結，無法開新任務:');
+      console.error(`        desc:   ${prev.taskDescription}`);
+      console.error(`        branch: ${prev.branch}`);
+      console.error(`        since:  ${prev.startedAt}`);
+      console.error('  fix: 走完 review → commit → finish；或無法救援用 ai-guardian abort');
     } catch (e) {
-      console.error('❌ [未完結任務] 偵測到殘留的任務宣言檔案（.guardian/current-task.json）！');
-      console.error('   請先執行 ai-guardian finish 完結上一個任務。');
+      console.error('[err] 殘留的 .guardian/current-task.json 解析失敗。先 ai-guardian finish 或 abort。');
     }
     process.exit(1);
   }
@@ -135,7 +127,7 @@ async function runStart(projectRoot, taskDescription, options = {}) {
 
       // guardian 暫存檔：自動修正 .gitignore（同前）
       if (guardianLines.length > 0) {
-        console.log('⚙️  [自動修正] 補寫 .guardian/ 暫存檔案的 .gitignore 排除規則...');
+        console.log('[fix] 補寫 .gitignore 排除 .guardian/ 暫存檔...');
         const guardianIgnoreBlock = [
           '', '# AI Guardian – 暫存任務狀態（不納入版本控制）',
           '.guardian/current-task.json', '.guardian/current-task.md',
@@ -152,14 +144,13 @@ async function runStart(projectRoot, taskDescription, options = {}) {
           execSync('git rm -r --cached --ignore-unmatch .guardian/current-task.json .guardian/current-task.md .guardian/archive/', { cwd: projectRoot, stdio: 'pipe' });
           execSync('git add .gitignore', { cwd: projectRoot, stdio: 'pipe' });
           execSync('git commit --no-verify -m "chore(guardian): add guardian transient files to .gitignore"', { cwd: projectRoot, stdio: 'pipe' });
-          console.log('   ✅ 已自動提交 .gitignore 修正。\n');
+          console.log('       committed .gitignore fix\n');
         } catch (e) { /* 已是最新，忽略 */ }
       }
 
       // 非 guardian 的未提交改動：直接放行，告知已納入 snapshot 基準
       if (nonGuardianLines.length > 0) {
-        console.log(`ℹ️  偵測到 ${nonGuardianLines.length} 個未提交的改動，已納入本次任務的 snapshot 基準。`);
-        console.log('   review 時只會報告任務期間新增的改動，這些既有改動不會被誤報。');
+        console.log(`[info] ${nonGuardianLines.length} 個未提交改動已納入 baseline，review 不會誤報。`);
       }
     }
   } catch (e) {
@@ -171,7 +162,7 @@ async function runStart(projectRoot, taskDescription, options = {}) {
     execSync('git rev-parse HEAD', { cwd: projectRoot, stdio: 'ignore' });
   } catch (e) {
     // 全新 repo，沒有任何 commit，建立一個空的初始 commit 讓分支能正常運作
-    console.log('🌱 偵測到全新 Git Repo（無任何 Commit），自動建立初始提交...');
+    console.log('[info] 全新 git repo（無 commit），建立空初始 commit 讓 branch 能 work...');
     execSync('git commit --allow-empty -m "chore: initial commit (ai-guardian bootstrap)"', { cwd: projectRoot, stdio: 'pipe' });
   }
 
@@ -180,14 +171,14 @@ async function runStart(projectRoot, taskDescription, options = {}) {
   const hotfixFlagPath = path.join(guardianDir, 'HOTFIX_MODE');
   if (isHotfix) {
     fs.writeFileSync(hotfixFlagPath, 'true', 'utf-8');
-    console.log('🚨 [急診模式啟動]：已自動豁免 AST 指紋掃描與平行實驗室限制。這必定是緊急修復。');
+    console.log('[hotfix] 跳過 AST 掃描與 lab 強制使用。請確定真的是急修。');
   } else {
     if (fs.existsSync(hotfixFlagPath)) fs.unlinkSync(hotfixFlagPath);
   }
 
   // 2.5 遠端同步檢查（hotfix 模式跳過——救火優先）
   if (isHotfix) {
-    console.log('ℹ️  [sync-check] hotfix 模式跳過遠端偵測。');
+    console.log('[hotfix] 跳過 remote sync-check。');
   } else {
     const syncResult = await checkRemoteSync(projectRoot, {
       strict: false,
@@ -208,14 +199,14 @@ async function runStart(projectRoot, taskDescription, options = {}) {
 
   try {
     execSync(`git checkout -b "${branchName}"`, { cwd: projectRoot, stdio: 'pipe' });
-    console.log(`🌿 建立新分支: ${branchName}`);
+    console.log(`[branch] new: ${branchName}`);
   } catch (e) {
     // 可能 branch 已存在
     try {
       execSync(`git checkout "${branchName}"`, { cwd: projectRoot, stdio: 'pipe' });
-      console.log(`🌿 切換至既有分支: ${branchName}`);
+      console.log(`[branch] reuse: ${branchName}`);
     } catch (e2) {
-      console.error(`❌ 無法建立或切換至分支 ${branchName}，請確認 Git 狀態是否乾淨。`);
+      console.error(`[err] 無法建立或切換至 ${branchName}。檢查 git 狀態是否乾淨。`);
       process.exit(1);
     }
   }
@@ -243,19 +234,12 @@ async function runStart(projectRoot, taskDescription, options = {}) {
   });
   fs.writeFileSync(path.join(guardianDir, 'current-task.md'), manifestMd, 'utf-8');
 
-  // [P2] 明確指示 AI 必須讀取任務宣言後才能繼續，確保 Pre-flight 不被跳過
-  console.log('');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🤖 [AI 必讀指令] 在你回應 User 之前，');
-  console.log('   你的第一個動作必須是讀取以下任務宣言檔案：');
-  console.log('');
-  console.log('   📄 .guardian/current-task.md');
-  console.log('');
-  console.log('   讀完後，輸出「Pre-flight Checkout 開工分析報告」');
-  console.log('   並等待 User 確認，才能開始動任何檔案。');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('');
-  console.log(`🚀 任務已就緒：「${taskDescription}」`);
+  // [P2] 明確指示 AI：先讀 manifest、輸出宣言、等 user 確認，再動程式
+  console.log(`[start] ${taskDescription}`);
+  console.log('  next (AI):');
+  console.log('    1. read .guardian/current-task.md');
+  console.log('    2. fill Q1–Q7 + output 合規聲明');
+  console.log('    3. wait for user to confirm before touching any file');
 }
 
 /**

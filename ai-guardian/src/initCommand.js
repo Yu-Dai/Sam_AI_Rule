@@ -84,7 +84,7 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
       const fullPath = path.join(targetDir, dir);
       if (!fs.existsSync(fullPath)) {
         fs.mkdirSync(fullPath, { recursive: true });
-        console.log('📁 建立沙盒資料夾: ' + dir);
+        console.log('[mkdir] ' + dir);
       }
     });
     config = {
@@ -99,7 +99,7 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
       const fullPath = path.join(targetDir, dir);
       if (!fs.existsSync(fullPath)) {
         fs.mkdirSync(fullPath, { recursive: true });
-        console.log('📁 建立資料夾: ' + dir);
+        console.log('[mkdir] ' + dir);
       }
     });
     config = {
@@ -113,7 +113,7 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
   // 儲存配置檔
   fs.writeFileSync(path.join(targetDir, 'ai-guardian.json'), JSON.stringify(config, null, JSON_INDENT), 'utf-8');
   writtenFiles.push('ai-guardian.json');
-  console.log('⚙️ 建立設定檔: ai-guardian.json (模式: ' + (isAdopt ? '無痛掛載 Adopt' : '全新標準 Standard') + ')');
+  console.log('[write] ai-guardian.json (mode: ' + (isAdopt ? 'adopt' : 'standard') + ')');
 
   // 2. 從 template 渲染規則本體（single source of truth: templates/AGENTS.md）
   const productionLabel = isAdopt ? '目前專案的所有主要原始碼' : '`src/production` 區的程式碼';
@@ -142,9 +142,9 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
       const skillRel = adapter.skillDir + '/SKILL.md';
       fs.writeFileSync(path.join(skillAbs, 'SKILL.md'), debateSkillProtocol, 'utf-8');
       writtenFiles.push(skillRel);
-      console.log('✅ 配置成功: ' + adapter.label + ' (rule reference + adversarial-debate skill)');
+      console.log('[ide] ' + adapter.label + ': rule + adversarial-debate skill');
     } else {
-      console.log('✅ 配置成功: ' + adapter.label + ' (rule reference only — IDE 無原生 skill 系統)');
+      console.log('[ide] ' + adapter.label + ': rule only (IDE 無原生 skill 系統)');
     }
   });
 
@@ -153,9 +153,9 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
   const agentsResult = writeAutoGenIfPossible(path.join(targetDir, 'AGENTS.md'), AGENTS_MD_MARKER, agentsMd);
   if (agentsResult.written) {
     writtenFiles.push('AGENTS.md');
-    console.log('✅ ' + agentsResult.action + ' AGENTS.md（規則真理來源）');
+    console.log('[' + (agentsResult.action === '建立' ? 'create' : 'update') + '] AGENTS.md');
   } else {
-    console.log('ℹ️  AGENTS.md 看起來已被使用者客製化（未帶 auto-gen marker），跳過覆寫。');
+    console.log('[skip] AGENTS.md 已客製化（無 auto-gen marker）');
   }
 
   // 4b. 寫入 CLAUDE.md stub — 用 Claude Code 原生 @import 語法把 AGENTS.md 載入 context
@@ -184,15 +184,15 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
   const claudeResult = writeAutoGenIfPossible(path.join(targetDir, 'CLAUDE.md'), CLAUDE_MD_MARKER, claudeStub);
   if (claudeResult.written) {
     writtenFiles.push('CLAUDE.md');
-    console.log('✅ ' + claudeResult.action + ' CLAUDE.md（stub → AGENTS.md）');
+    console.log('[' + (claudeResult.action === '建立' ? 'create' : 'update') + '] CLAUDE.md (stub → @AGENTS.md)');
   } else {
-    console.log('ℹ️  CLAUDE.md 看起來已被使用者客製化（未帶 stub marker），跳過覆寫。');
+    console.log('[skip] CLAUDE.md 已客製化（無 stub marker）');
   }
 
   // 5. 確保有 .git 資料夾（沒有就 init 一個，否則後續 hook 與 auto-commit 都會失敗）
   const gitHooksDir = path.join(targetDir, '.git', 'hooks');
   if (!fs.existsSync(gitHooksDir)) {
-    console.log('⚠️  未偵測到 .git 資料夾，AI Guardian 自動執行 git init...');
+    console.log('[init] 無 .git，自動執行 git init');
     try {
       execSync('git init', { cwd: targetDir, stdio: 'ignore' });
     } catch (err) { }
@@ -222,9 +222,9 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
   if (!existingGitignore.includes('.guardian/current-task.json')) {
     fs.writeFileSync(gitignorePath, existingGitignore + guardianIgnoreBlock + '\n', 'utf-8');
     writtenFiles.push('.gitignore');
-    console.log('📝 已更新 .gitignore：加入 AI Guardian 暫存檔案排除規則');
+    console.log('[update] .gitignore (加入 .guardian/ 暫存檔排除規則)');
   } else {
-    console.log('ℹ️  .gitignore 已含 AI Guardian 排除規則，跳過');
+    console.log('[skip] .gitignore 已含 guardian 排除規則');
   }
 
   // 7. 掛載 Git pre-commit Hook
@@ -235,23 +235,20 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
     const hookLines = [
       '#!/bin/sh',
       '# AI Guardian pre-commit hook',
-      'echo ""',
-      'echo "🛡️  AI Guardian 正在驗證你的 Commit 是否符合規範..."',
       '',
-      '# guard 指令內部已整合 reviewPassed 檢查 + AST 掃描，單一入口避免重複攔截',
+      '# guard 指令內部整合 reviewPassed 檢查 + AST 掃描，單一入口避免重複攔截',
       'ai-guardian guard',
       'GUARD_EXIT=$?',
       '',
       'if [ $GUARD_EXIT -ne 0 ]; then',
-      '  echo "🚫 守衛攔截：請修復上述問題後再重試 Commit。"',
+      '  echo "[blocked] commit 被攔截。修復上述問題後重試。"',
       '  exit 1',
       'fi',
       '',
-      'echo "✅  AI Guardian 大門長批准！你的 Commit 將被記錄。"',
       'exit 0',
     ];
     fs.writeFileSync(preCommitPath, hookLines.join('\n'), { mode: 0o755 });
-    console.log('🔗 成功掛載 Git Hook v2: .git/hooks/pre-commit (三層防護網已上鎖)');
+    console.log('[hook] mounted .git/hooks/pre-commit');
   }
 
   // 8. 自動 commit guardian 設定檔 —— 確保 init/adopt 後 working tree 是乾淨的
@@ -291,24 +288,18 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true) {
     const staged = execSync('git diff --cached --name-only', { cwd: targetDir, stdio: ['pipe', 'pipe', 'ignore'] }).toString().trim();
     if (staged) {
       execSync('git commit --no-verify -m "chore(guardian): apply ai-guardian setup and .gitignore rules"', { cwd: targetDir, stdio: 'pipe' });
-      console.log('\n✅ 已自動提交 AI Guardian 設定（working tree 現在是乾淨的）。');
+      console.log('\n[ok] auto-committed guardian setup (working tree is clean)');
     } else {
-      console.log('\nℹ️  設定無變動，無需提交。');
+      console.log('\n[skip] 設定無變動，無需提交');
     }
   } catch (e) {
-    console.log('\n⚠️  Git 自動提交跳過（原因：' + e.message.split('\n')[0] + '）');
-    console.log('   若 working tree 不乾淨，請手動執行：');
-    console.log('   git add ' + writtenFiles.map(f => `"${f}"`).join(' '));
-    console.log('   git commit --no-verify -m "chore(guardian): apply ai-guardian setup"');
+    console.log('\n[warn] git auto-commit skipped: ' + e.message.split('\n')[0]);
+    console.log('  fix: git add ' + writtenFiles.map(f => `"${f}"`).join(' '));
+    console.log('       git commit --no-verify -m "chore(guardian): apply ai-guardian setup"');
   }
 
-  console.log('\n🎉 防禦網初始化完成！');
-  console.log('\n📖 使用流程：');
-  console.log('   ① ai-guardian start "<任務描述>"  ← 開工前必須執行');
-  console.log('   ② ... 進行開發工作 ...');
-  console.log('   ③ ai-guardian review              ← 完工後必須通過審查');
-  console.log('   ④ git commit                      ← 審查通過後才能提交');
-  console.log('   ⑤ ai-guardian finish              ← 任務結束，自動合併主線並清理現場');
+  console.log('\n[done] guardian 已掛載');
+  console.log('       workflow: start "<task>" → work → review → commit → finish');
 }
 
 module.exports = { initProject };
