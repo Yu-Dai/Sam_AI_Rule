@@ -33,7 +33,7 @@ const {
 } = require('../src/utils/conflictResolver');
 
 // IDE 編號 → key 的對照（順序也用於 askIDE 顯示）
-const IDE_NUM_TO_KEY = { '1': 'cursor', '2': 'windsurf', '3': 'roo', '4': 'claude', '5': 'antigravity', '6': 'eli' };
+const IDE_NUM_TO_KEY = { '1': 'cursor', '2': 'windsurf', '3': 'roo', '4': 'claude', '5': 'antigravity', '6': 'eli', '7': 'codex' };
 const IDE_VALID_KEYS = new Set(Object.values(IDE_NUM_TO_KEY));
 const VALID_CONFLICT_DECISIONS = new Set(['skip', 'overwrite', 'insert-import']);
 
@@ -230,6 +230,7 @@ async function askIDEInteractive(ask) {
   console.log('  4. claude       (.claude/rules + skills)');
   console.log('  5. antigravity  (.agents/rules + skills)');
   console.log('  6. eli          (.ili/rules + skills)');
+  console.log('  7. codex        (.agents/skills only — 跟 antigravity 共用 .agents/)');
 
   while (true) {
     const answer = await ask('您的選擇（必填，至少一個）: ');

@@ -64,6 +64,14 @@ const IDE_ADAPTERS = {
     // ELI 原生讀 root AGENTS.md，rule 檔只是備援指向（同 antigravity / roo / windsurf 模式）
     renderRule: () => REFERENCE_NOTE + '\n',
   },
+  codex: {
+    label: 'GPT CODEX',
+    // Codex 走 AGENTS.md spec — 規則本體就是 root AGENTS.md，無獨立 rule 檔
+    // skill 路徑跟 antigravity 共用 .agents/skills/（兩者同時選會寫到同一檔，內容相同無害）
+    ruleFile: null,
+    skillDir: '.agents/skills/adversarial-debate',
+    renderRule: null,
+  },
 };
 
 function initProject(targetDir, ides = ['antigravity'], isAdopt = true, options = {}) {
@@ -123,28 +131,38 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true, options 
 
   const debateSkillProtocol = loadTemplate('SKILL_adversarial_debate.md').trimEnd();
 
-  // 3. 為勾選的每個 IDE 寫入 reference stub（規則本體只活在 AGENTS.md / templates）
+  // 3. 為勾選的每個 IDE 寫入配置（規則本體只活在 AGENTS.md / templates）
+  //    adapter 兩個 slot 都 optional：ruleFile=null 代表 IDE 從 root AGENTS.md 直接讀（如 Codex）；
+  //    skillDir=null 代表 IDE 沒有原生 skill 系統（如 Cursor / Windsurf / Roo）
   ides.forEach(ideName => {
     const adapter = IDE_ADAPTERS[ideName.toLowerCase()];
     if (!adapter) return;
 
-    const ruleAbs = path.join(targetDir, adapter.ruleFile);
-    fs.mkdirSync(path.dirname(ruleAbs), { recursive: true });
-    fs.writeFileSync(ruleAbs, adapter.renderRule(), 'utf-8');
-    writtenFiles.push(adapter.ruleFile);
+    const wroteRule = !!adapter.ruleFile;
+    const wroteSkill = !!adapter.skillDir;
 
-    if (adapter.skillDir) {
+    if (wroteRule) {
+      const ruleAbs = path.join(targetDir, adapter.ruleFile);
+      fs.mkdirSync(path.dirname(ruleAbs), { recursive: true });
+      fs.writeFileSync(ruleAbs, adapter.renderRule(), 'utf-8');
+      writtenFiles.push(adapter.ruleFile);
+    }
+
+    if (wroteSkill) {
       const skillAbs = path.join(targetDir, adapter.skillDir);
       fs.mkdirSync(skillAbs, { recursive: true });
       const skillRel = adapter.skillDir + '/SKILL.md';
       fs.writeFileSync(path.join(skillAbs, 'SKILL.md'), debateSkillProtocol, 'utf-8');
       writtenFiles.push(skillRel);
-      console.log('[ide] ' + adapter.label + ': rule + adversarial-debate skill');
-      summary.push(`IDE ${adapter.label}: rule + skill`);
-    } else {
-      console.log('[ide] ' + adapter.label + ': rule only (IDE 無原生 skill 系統)');
-      summary.push(`IDE ${adapter.label}: rule only`);
     }
+
+    // 用實際寫入的東西組描述（避免 hardcoding 「rule + skill」這種固定組合）
+    const parts = [];
+    if (wroteRule) parts.push('rule');
+    if (wroteSkill) parts.push('adversarial-debate skill');
+    const desc = parts.length > 0 ? parts.join(' + ') : 'AGENTS.md only (no rule / skill 寫入)';
+    console.log('[ide] ' + adapter.label + ': ' + desc);
+    summary.push(`IDE ${adapter.label}: ${desc}`);
   });
 
   // 4a. 寫入 AGENTS.md — 全規則的 SSoT（個人 + 行為原則 + 工具規格，跨 IDE 標準）
@@ -178,7 +196,7 @@ function initProject(targetDir, ides = ['antigravity'], isAdopt = true, options 
     '<!--',
     '  Claude Code stub by ai-guardian.',
     '  下方「@AGENTS.md」是 Claude Code 原生 import 語法 — session 啟動時會把 AGENTS.md 全文展開進 context。',
-    '  其他 IDE（Cursor / Antigravity / Roo / Windsurf / ELI）直接讀 root AGENTS.md，這個 import 對它們無作用也無害。',
+    '  其他 IDE（Cursor / Antigravity / Roo / Windsurf / ELI / GPT Codex）直接讀 root AGENTS.md，這個 import 對它們無作用也無害。',
     '  per-project 客製：刪掉本檔第一行的 stub marker 註解後，ai-guardian init 不會再覆寫本檔。',
     '-->',
     '',

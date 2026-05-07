@@ -6,7 +6,7 @@
 
 | 項目 | 路徑 | 用途 |
 |------|------|------|
-| 規則本體（SSoT） | [`ai-guardian/templates/AGENTS.md`](ai-guardian/templates/AGENTS.md) | 個人身分 / 行為原則 §1–§16 / 硬性紅線 / 工具規格附錄。所有 AI coding tool（Claude Code、Cursor、Antigravity、Roo、Windsurf、ELI）部署時都讀這份 |
+| 規則本體（SSoT） | [`ai-guardian/templates/AGENTS.md`](ai-guardian/templates/AGENTS.md) | 個人身分 / 行為原則 §1–§16 / 硬性紅線 / 工具規格附錄。所有 AI coding tool（Claude Code、Cursor、Antigravity、Roo、Windsurf、ELI、GPT Codex）部署時都讀這份 |
 | 動工前裁決 | [`ai-guardian/templates/current-task.md`](ai-guardian/templates/current-task.md) | Q1–Q7 填空題，由 `ai-guardian start` 在每次任務開始時 active 載入 |
 | 專案方向追蹤 | [`ai-guardian/templates/PROJECT.md`](ai-guardian/templates/PROJECT.md) | 長期專案的目標 / 非目標 / 歷史轉向北極星（給人類填寫） |
 | 程式碼守衛 CLI | [`ai-guardian/`](ai-guardian/) | AST-level commit 阻擋與任務流程管理 |
@@ -63,7 +63,7 @@ ai-guardian init         # 全新專案，建立 src/production / lab / archive 
 - `CLAUDE.md` — Claude Code stub（用 `@AGENTS.md` 把規則拉進 context）
 - `.guardian/` — 沙盒目錄與任務狀態
 - `.{ide}/rules/` — 各 IDE 的 rule 檔（指向 AGENTS.md 的 reference stub）
-- `.{ide}/skills/adversarial-debate/SKILL.md` — 對 Claude Code / Antigravity / ELI 寫，其他 IDE 跳過
+- `.{ide}/skills/adversarial-debate/SKILL.md` — 對 Claude Code / Antigravity / ELI / GPT Codex 寫，其他 IDE 跳過
 - `.git/hooks/pre-commit` — guardian 攔截 hook
 - `PROJECT.md`（選擇性，按你回答）
 
